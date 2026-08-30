@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+build/
+dist/
+
+# Environment / secrets
+.env
+*.local.env
+
+# Data
+data/raw/*
+data/processed/*
+data/evaluation/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/evaluation/.gitkeep
+
+# Vector store / model caches
+chroma_db/
+.chroma/
+*.sqlite3
+.cache/
+models_cache/
+
+# Logs
+*.log
+logs/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.claude/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
