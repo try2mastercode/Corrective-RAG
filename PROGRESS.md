@@ -50,7 +50,7 @@ unless the user says otherwise again.
 | Phase | Commit hash | Message |
 |---|---|---|
 | 0 | `cee5874` | chore: initialize local rag project |
-| 1 | _(see `git log` — committed same session)_ | feat: implement basic local rag |
+| 1 | `044a77f` | feat: implement basic local rag |
 
 ## Completed phase detail — Phase 0
 
