@@ -36,9 +36,9 @@ unless the user says otherwise again.
 
 - [x] **Phase 0** — Repository and Local Environment — DONE (commit `cee5874`)
 - [x] **Phase 1** — Basic Local RAG — DONE (commits `044a77f`, `d632782`)
-- [x] **Phase 2** — Retrieval Grading — DONE, awaiting commit approval
-- [ ] **Phase 3** — Corrective Query Rewriting and Re-Retrieval — NEXT
-- [ ] Phase 4 — Web Search Fallback (need provider decision — see above)
+- [x] **Phase 2** — Retrieval Grading — DONE (commit `f5e748a`)
+- [x] **Phase 3** — Corrective Query Rewriting and Re-Retrieval — DONE, awaiting commit approval
+- [ ] **Phase 4** — Web Search Fallback — NEXT (need provider decision — see above)
 - [ ] Phase 5 — Evidence Builder and Grounded Generation
 - [ ] Phase 6 — Hallucination / Claim Verification
 - [ ] Phase 7 — RAGAS Evaluation and Benchmarking
@@ -52,7 +52,8 @@ unless the user says otherwise again.
 | 0 | `cee5874` | chore: initialize local rag project |
 | 1 | `044a77f` | feat: implement basic local rag |
 | 1 (fixup) | `d632782` | chore: record phase 1 commit hash in progress tracker |
-| 2 | _pending_ | feat: add retrieval grading |
+| 2 | `f5e748a` | feat: add retrieval grading |
+| 3 | _pending_ | feat: add corrective query rewriting |
 
 ## Completed phase detail — Phase 0
 
@@ -148,31 +149,86 @@ these until their designated phase):
 - No query rewriting, correction loop, web fallback, evidence builder, or claim verification yet
   (Phases 3–6, unchanged from Phase 1's limitations list above).
 
-## Current phase detail — Phase 3 (Corrective Query Rewriting and Re-Retrieval) — not started
+## Completed phase detail — Phase 3 (Corrective Query Rewriting and Re-Retrieval)
 
-Scope (from todo.md section 38 / section 11-12):
-- [ ] Query rewriter (`app/correction/query_rewriter.py`) — LLM call producing a structured
-  `{original_query, rewritten_query, reason}`, must not answer the question, must preserve intent
-- [ ] Corrective retrieval controller (`app/correction/controller.py`) — orchestrates:
-  retrieve → grade → if quality is LOW/MEDIUM (below configurable bar) → rewrite → retrieve again
-  → grade again → merge/pick best evidence
-- [ ] Bounded rounds via existing `MAX_RETRIEVAL_ROUNDS` setting (already in config, unused so far)
-- [ ] Repeated/equivalent-query detection to avoid pointless loops
-- [ ] Result merging across rounds + re-ranking
-- [ ] Before/after retrieval diagnostics (extend the existing `/ask` debug payload)
-- [ ] Wire the controller into `/ask`, replacing the current single-shot retrieve-then-grade flow
-- [ ] Tests: successful correction (weak → strong after rewrite), failed correction (still weak
-  after max rounds), no-correction-when-strong (avoid unnecessary rewrite)
+All checklist items done. Verified via `pytest` (42 passed — 12 new: 7 controller, 5 rewriter)
+and two live HTTP smoke tests against real Ollama/`llama3.2:3b`:
+1. Asked a question with **no relevant document in the corpus** (pizza dough ingredients,
+   against a lighthouse-facts document): round 1 graded IRRELEVANT/LOW, the rewriter produced a
+   sensible, intent-preserving expansion without inventing facts, round 2 (bounded by
+   `MAX_RETRIEVAL_ROUNDS=2`) was still LOW, and the system correctly returned "I don't have
+   enough retrieved evidence" rather than hallucinating from the unrelated document.
+2. Asked a well-matched question against the same document: graded RELEVANT/HIGH on round 1,
+   loop stopped immediately with **zero** rewrite calls — confirming strong retrieval avoids
+   unnecessary correction.
 
-Acceptance criteria: a deliberately weak initial retrieval must trigger query rewriting and a
-second retrieval, while a strong initial retrieval must avoid unnecessary correction.
+**Design decision worth remembering:** each round's own STRONG/WEAK decision (which controls
+whether the loop continues) is based on *that round's own retrieved set only* — matching the
+spec's diagram, which grades immediately after each retrieve step. The *final* evidence set and
+its reported quality (`final_quality`, surfaced as `retrieval_status`) are the union of
+everything graded across all rounds, since that's what's actually handed to the answer
+generator. These two numbers can legitimately diverge: a caught test case showed round 2 scoring
+HIGH on its own retrieval while the merged final quality was only MEDIUM, because an earlier
+weak chunk from round 1 was still dragging the merged average down. This is intentional
+"merge, don't discard" behavior per todo.md section 12, not a bug — worth remembering before
+"fixing" a future divergence like this.
+
+Key artifacts added:
+- `app/correction/query_rewriter.py` — `rewrite_query`: structured JSON output
+  (`{rewritten_query, reason}`), same untrusted-content framing pattern as the grader/generator
+  prompts, retry-on-malformed-JSON, falls back to the **unchanged original query** (not a guess)
+  after exhausting retries
+- `app/correction/controller.py` — `run_corrective_retrieval`: the retrieve→grade→rewrite→
+  retrieve-again loop; grades are cached by `chunk_id` (always graded against the *original*
+  question, never the rewritten one, since relevance to the user's actual question is what
+  matters) so a chunk retrieved again in a later round isn't re-graded; repeated/equivalent-query
+  detection (exact-match after normalization) stops the loop early if a rewrite doesn't actually
+  change the query; final chunks are the merged, non-`IRRELEVANT` pool sorted by score
+  ("keep the best chunks")
+- `app/core/models.py` — `QueryRewrite`, `RetrievalRound`, `CorrectiveRetrievalResult`
+- `app/api/routes_ask.py` — `/ask` now runs the full corrective loop instead of a single
+  retrieve+grade pass; `debug: true` exposes all rounds, all rewrite attempts, and the final
+  merged quality breakdown
+- `tests/unit/test_query_rewriter.py`, `tests/unit/test_controller.py` (uses a `ScriptedLLM` test
+  double that routes fake responses by system-prompt identity, and a `FakeRetriever` keyed by
+  query string, to exercise multi-round scenarios without hitting a real model)
+
+Known limitations / deliberate scope boundaries:
+- No web search fallback yet — the pizza-dough smoke test above is exactly the scenario Phase 4
+  will extend with a web search attempt after local correction is exhausted.
+- Repeated-query detection is exact-string-match only (case/whitespace-normalized), not semantic
+  similarity — todo.md section 12 just says "detect repeated/equivalent queries" without
+  mandating a technique, and exact-match is the simplest thing that satisfies the stated need
+  (stop obviously-pointless loops) without adding an embedding-similarity dependency here.
+- No formal Evidence Builder with stable cross-stage evidence IDs yet (Phase 5) — citations in
+  `/ask` responses are still just the final merged-and-sorted order.
+- No claim verification / hallucination check yet (Phase 6).
+
+## Current phase detail — Phase 4 (Web Search Fallback) — not started
+
+Scope (from todo.md section 38 / section 13):
+- [ ] **Ask the user which web search provider to use** — this was explicitly deferred from
+  Phase 0 (see "Locked-in decisions" table above: options were DuckDuckGo/no-key, or
+  Tavily/SerpAPI/Brave if the user has a key). Do this before writing the adapter.
+- [ ] Web search adapter (`app/web/search.py`), provider configurable via `WEB_SEARCH_PROVIDER`
+- [ ] Result normalization: URL, title, snippet/content, retrieval timestamp
+- [ ] Source deduplication
+- [ ] Provider timeout + failure handling (must not crash `/ask`; degrade gracefully)
+- [ ] `WEB_SEARCH_ENABLED` feature flag (already in config/`.env.example`, unused so far)
+- [ ] Trigger condition: local retrieval still weak after `run_corrective_retrieval` is exhausted
+  AND `web_search_enabled` AND (`request.web_fallback` — already an `AskRequest` field, unused
+  so far)
+- [ ] Clear `LOCAL_DOCUMENT` vs `WEB_SOURCE` labeling — must never blur the two
+- [ ] Tests: fallback triggers only when appropriate, timeout handling, provider failure handling
+
+Acceptance criteria: the system uses web search only when configured and local retrieval remains
+weak after corrective retrieval; web evidence is clearly distinguished from local documents.
 
 ### Next action when resuming
-1. Re-read this file top to bottom, then skim `todo.md` sections 11-12 for the rewrite/correction
-   spec, and section 27 (`app/correction/` module layout).
-2. Ask the user for permission before starting implementation, per the standing workflow rule
-   (permission checkpoints are back in effect as of Phase 2 — see the note above).
-3. Implement the checklist above, run tests, review `git diff`, ask for permission before
-   committing, commit as `feat: add corrective query rewriting`, update this file's Phase status
-   table and commit log, then move to Phase 4 (and ask about the web search provider decision
-   that was deferred back in Phase 0).
+1. Re-read this file top to bottom, then skim `todo.md` section 13 for the web fallback spec.
+2. **Ask the user for the web search provider decision first** (see checklist above) — this
+   blocks implementation, unlike prior phases where the decision was already made.
+3. Ask for permission before starting implementation (standing workflow rule).
+4. Implement the checklist above, run tests, review `git diff`, ask for permission before
+   committing, commit as `feat: add web search fallback`, update this file's Phase status table
+   and commit log, then move to Phase 5.

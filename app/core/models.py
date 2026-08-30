@@ -50,6 +50,25 @@ class RetrievalQualityResult(BaseModel):
     decision: str  # HIGH | MEDIUM | LOW
 
 
+class QueryRewrite(BaseModel):
+    original_query: str
+    rewritten_query: str
+    reason: str
+
+
+class RetrievalRound(BaseModel):
+    round: int
+    query: str
+    quality: RetrievalQualityResult
+
+
+class CorrectiveRetrievalResult(BaseModel):
+    final_chunks: list[RetrievedChunk]
+    rounds: list[RetrievalRound]
+    rewrites: list[QueryRewrite]
+    final_quality: RetrievalQualityResult
+
+
 class AskRequest(BaseModel):
     question: str
     web_fallback: bool = False
