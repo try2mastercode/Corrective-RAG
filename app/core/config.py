@@ -31,6 +31,14 @@ class Settings(BaseSettings):
     max_retrieval_rounds: int = 2
     max_answer_corrections: int = 1
 
+    # Retrieval quality scoring (Phase 2)
+    quality_weight_mean: float = 0.50
+    quality_weight_best: float = 0.30
+    quality_weight_relevant_ratio: float = 0.20
+    retrieval_quality_high_threshold: float = 0.75
+    retrieval_quality_medium_threshold: float = 0.55
+    grader_max_retries: int = 2
+
     # App
     app_env: str = "development"
     log_level: str = "INFO"

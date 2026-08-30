@@ -31,6 +31,25 @@ class RetrieveResponse(BaseModel):
     results: list[RetrievedChunk]
 
 
+class RetrievalGrade(BaseModel):
+    score: float
+    label: str  # RELEVANT | PARTIALLY_RELEVANT | IRRELEVANT
+    reason: str
+
+
+class GradedChunk(BaseModel):
+    chunk: RetrievedChunk
+    grade: RetrievalGrade
+
+
+class RetrievalQualityResult(BaseModel):
+    mean_score: float
+    best_score: float
+    relevant_ratio: float
+    quality_score: float
+    decision: str  # HIGH | MEDIUM | LOW
+
+
 class AskRequest(BaseModel):
     question: str
     web_fallback: bool = False
@@ -47,6 +66,7 @@ class AskResponse(BaseModel):
     answer: str
     sources: list[SourceCitation]
     retrieval_status: str
+    debug: dict | None = None
 
 
 class DocumentInfo(BaseModel):
