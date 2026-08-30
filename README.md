@@ -11,9 +11,19 @@ specification and [PROGRESS.md](PROGRESS.md) for current status and decisions ma
 
 ## Status
 
-**Phase 0 (repository and local environment) — in progress.** Only the `/health` endpoint and
-project scaffolding exist so far. Ingestion, retrieval, grading, correction, web fallback,
-generation, verification, evaluation, and the frontend are not yet implemented.
+**Phase 1 (basic local RAG) complete.** Documents can be uploaded, indexed, retrieved, and
+answered by the local Llama model with source citations. Retrieval grading, corrective
+query rewriting, web fallback, a formal evidence builder, hallucination verification, RAGAS
+evaluation, and the frontend are not yet implemented — see [PROGRESS.md](PROGRESS.md) for the
+phase-by-phase plan and status.
+
+Try it yourself:
+
+```bash
+uvicorn app.main:app --reload
+python -m scripts.ingest ./data/raw/some_document.pdf
+python -m scripts.ask "What does the document say about X?"
+```
 
 ## Stack
 
