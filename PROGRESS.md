@@ -37,8 +37,8 @@ unless the user says otherwise again.
 - [x] **Phase 0** — Repository and Local Environment — DONE (commit `cee5874`)
 - [x] **Phase 1** — Basic Local RAG — DONE (commits `044a77f`, `d632782`)
 - [x] **Phase 2** — Retrieval Grading — DONE (commit `f5e748a`)
-- [x] **Phase 3** — Corrective Query Rewriting and Re-Retrieval — DONE, awaiting commit approval
-- [ ] **Phase 4** — Web Search Fallback — NEXT (need provider decision — see above)
+- [x] **Phase 3** — Corrective Query Rewriting and Re-Retrieval — DONE (commit `b7380b9`)
+- [ ] **Phase 4** — Web Search Fallback — NEXT (stopped here per user request; need provider decision — see above)
 - [ ] Phase 5 — Evidence Builder and Grounded Generation
 - [ ] Phase 6 — Hallucination / Claim Verification
 - [ ] Phase 7 — RAGAS Evaluation and Benchmarking
@@ -53,7 +53,7 @@ unless the user says otherwise again.
 | 1 | `044a77f` | feat: implement basic local rag |
 | 1 (fixup) | `d632782` | chore: record phase 1 commit hash in progress tracker |
 | 2 | `f5e748a` | feat: add retrieval grading |
-| 3 | _pending_ | feat: add corrective query rewriting |
+| 3 | `b7380b9` | feat: add corrective query rewriting |
 
 ## Completed phase detail — Phase 0
 
