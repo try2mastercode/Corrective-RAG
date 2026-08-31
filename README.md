@@ -1,4 +1,4 @@
-# Corrective RAG — Self-Evaluating Local Llama
+# Corrective RAG : Self-Evaluating Local Llama
 
 A RAG pipeline that double-checks itself: grades its own retrieval, rewrites the query and
 retries if the results are weak, falls back to web search if it has to, and verifies every
