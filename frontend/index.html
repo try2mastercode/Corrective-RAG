@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Corrective RAG</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>Corrective RAG</h1>
+    <nav class="tabs">
+      <button class="tab-button active" data-tab="ask">Ask</button>
+      <button class="tab-button" data-tab="documents">Documents</button>
+      <button class="tab-button" data-tab="evaluation">Evaluation</button>
+    </nav>
+    <div class="api-base-wrap">
+      <label for="api-base">API base URL</label>
+      <input id="api-base" type="text" value="http://127.0.0.1:8000" />
+    </div>
+  </header>
+
+  <main>
+    <!-- ASK TAB -->
+    <section id="tab-ask" class="tab-panel active">
+      <form id="ask-form" class="ask-form">
+        <textarea id="question-input" placeholder="Ask a question about your documents..." rows="3" required></textarea>
+        <div class="ask-options">
+          <label><input type="checkbox" id="web-fallback-checkbox" /> Allow web search fallback</label>
+          <label><input type="checkbox" id="debug-checkbox" /> Debug mode</label>
+          <button type="submit" id="ask-submit">Ask</button>
+        </div>
+      </form>
+
+      <div id="ask-error" class="error-box hidden"></div>
+      <div id="ask-loading" class="loading-box hidden">Thinking... this can take a while on a local model, especially with correction or web fallback.</div>
+
+      <div id="answer-block" class="answer-block hidden">
+        <h2>Answer</h2>
+        <p id="answer-text"></p>
+
+        <div class="status-row">
+          <span class="badge" id="retrieval-status-badge"></span>
+          <span class="badge" id="grounding-status-badge"></span>
+        </div>
+
+        <h3>Sources</h3>
+        <ul id="sources-list" class="sources-list"></ul>
+      </div>
+
+      <div id="debug-panel" class="debug-panel hidden">
+        <h2>Debug</h2>
+
+        <details open>
+          <summary>Retrieval rounds</summary>
+          <div id="debug-rounds"></div>
+        </details>
+
+        <details>
+          <summary>Query rewrites</summary>
+          <div id="debug-rewrites"></div>
+        </details>
+
+        <details>
+          <summary>Web fallback</summary>
+          <div id="debug-web"></div>
+        </details>
+
+        <details>
+          <summary>Evidence</summary>
+          <div id="debug-evidence"></div>
+        </details>
+
+        <details>
+          <summary>Claim verification</summary>
+          <div id="debug-verification"></div>
+        </details>
+      </div>
+    </section>
+
+    <!-- DOCUMENTS TAB -->
+    <section id="tab-documents" class="tab-panel">
+      <h2>Upload a document</h2>
+      <form id="upload-form" class="upload-form">
+        <input type="file" id="file-input" accept=".pdf,.txt,.md,.markdown,.docx" required />
+        <button type="submit">Upload &amp; Index</button>
+      </form>
+      <div id="upload-status" class="status-message"></div>
+
+      <h2>Indexed documents</h2>
+      <button id="refresh-documents">Refresh</button>
+      <table class="documents-table">
+        <thead>
+          <tr><th>Title</th><th>Source</th><th>Chunks</th><th>Indexed at</th><th></th></tr>
+        </thead>
+        <tbody id="documents-body"></tbody>
+      </table>
+    </section>
+
+    <!-- EVALUATION TAB -->
+    <section id="tab-evaluation" class="tab-panel">
+      <h2>Baseline vs CRAG evaluation</h2>
+      <p class="hint">
+        Runs the evaluation dataset through both the baseline pipeline (retrieve -&gt; generate)
+        and the full CRAG pipeline, then computes RAGAS metrics. This can take a long time --
+        keep the question limit small for an interactive check, or use
+        <code>scripts/evaluate.py</code> for a full unattended run.
+      </p>
+      <form id="eval-form" class="eval-form">
+        <label>Question limit <input type="number" id="eval-limit" value="2" min="1" max="24" /></label>
+        <label><input type="checkbox" id="eval-web-fallback" /> Web fallback</label>
+        <label><input type="checkbox" id="eval-include-ragas" checked /> Include RAGAS metrics</label>
+        <button type="submit">Run evaluation</button>
+      </form>
+      <div id="eval-loading" class="loading-box hidden">Running evaluation... this can take several minutes.</div>
+      <div id="eval-error" class="error-box hidden"></div>
+      <div id="eval-report" class="eval-report hidden"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
