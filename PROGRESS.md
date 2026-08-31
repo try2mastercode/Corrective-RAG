@@ -40,7 +40,7 @@ direction), not for routine "may I commit?" checkpoints.
 - [x] **Phase 2** — Retrieval Grading — DONE (commit `f5e748a`)
 - [x] **Phase 3** — Corrective Query Rewriting and Re-Retrieval — DONE (commit `b7380b9`)
 - [x] **Phase 4** — Web Search Fallback — DONE (commit `0fe03ca`)
-- [x] **Phase 5** — Evidence Builder and Grounded Generation — DONE, committing now
+- [x] **Phase 5** — Evidence Builder and Grounded Generation — DONE (commit `3813458`)
 - [ ] **Phase 6** — Hallucination / Claim Verification — IN PROGRESS
 - [ ] Phase 7 — RAGAS Evaluation and Benchmarking
 - [ ] Phase 8 — Vanilla HTML/CSS/JS Frontend
@@ -56,7 +56,7 @@ direction), not for routine "may I commit?" checkpoints.
 | 2 | `f5e748a` | feat: add retrieval grading |
 | 3 | `b7380b9` | feat: add corrective query rewriting |
 | 4 | `0fe03ca` | feat: add web search fallback |
-| 5 | _pending_ | feat: add grounded evidence generation |
+| 5 | `3813458` | feat: add grounded evidence generation |
 
 ## Completed phase detail — Phase 0
 
