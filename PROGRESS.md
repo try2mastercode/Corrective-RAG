@@ -44,7 +44,7 @@ direction), not for routine "may I commit?" checkpoints.
 - [x] **Phase 6** — Hallucination / Claim Verification — DONE (commit `52a5521`)
 - [x] **Phase 7** — RAGAS Evaluation and Benchmarking — DONE (commit `6b9192a`)
 - [x] **Phase 8** — Vanilla HTML/CSS/JS Frontend — DONE (commit `a42fc2f`)
-- [x] **Phase 9** — Observability, Security, Testing, Hardening — DONE, committing now — **PROJECT COMPLETE**
+- [x] **Phase 9** — Observability, Security, Testing, Hardening — DONE (commit `cc19c1b`) — **PROJECT COMPLETE**
 
 ## Commit log
 
@@ -60,7 +60,7 @@ direction), not for routine "may I commit?" checkpoints.
 | 6 | `52a5521` | feat: add hallucination verification |
 | 7 | `6b9192a` | feat: add ragas evaluation |
 | 8 | `a42fc2f` | feat: add vanilla javascript frontend |
-| 9 | _pending_ | chore: harden and document crag project |
+| 9 | `cc19c1b` | chore: harden and document crag project |
 
 ## Completed phase detail — Phase 0
 
