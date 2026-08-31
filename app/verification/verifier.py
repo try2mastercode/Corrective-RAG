@@ -17,6 +17,11 @@ judge support using only the supplied evidence.
 
 Given a claim and evidence passages, determine whether the evidence supports the claim.
 
+A claim is supported if the evidence contains it directly, OR if the evidence lists it as an
+item in a list/set (for example, evidence text "Languages: Python, SQL, Java" directly supports
+the claim "knows Java" -- it does not need a separate sentence elaborating on Java specifically).
+Do not require more detail or context than the claim itself asserts.
+
 Return JSON only, with exactly these keys:
 {"supported": true, "confidence": 0.9, "evidence_ids": ["E1"]}
 
