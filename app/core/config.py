@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     retrieval_quality_medium_threshold: float = 0.55
     grader_max_retries: int = 2
 
+    # Evidence builder (Phase 5)
+    max_context_chars: int = 8000
+
     # App
     app_env: str = "development"
     log_level: str = "INFO"

@@ -40,8 +40,8 @@ direction), not for routine "may I commit?" checkpoints.
 - [x] **Phase 2** — Retrieval Grading — DONE (commit `f5e748a`)
 - [x] **Phase 3** — Corrective Query Rewriting and Re-Retrieval — DONE (commit `b7380b9`)
 - [x] **Phase 4** — Web Search Fallback — DONE (commit `0fe03ca`)
-- [ ] **Phase 5** — Evidence Builder and Grounded Generation — IN PROGRESS
-- [ ] Phase 6 — Hallucination / Claim Verification
+- [x] **Phase 5** — Evidence Builder and Grounded Generation — DONE, committing now
+- [ ] **Phase 6** — Hallucination / Claim Verification — IN PROGRESS
 - [ ] Phase 7 — RAGAS Evaluation and Benchmarking
 - [ ] Phase 8 — Vanilla HTML/CSS/JS Frontend
 - [ ] Phase 9 — Observability, Security, Testing, Hardening
@@ -56,6 +56,7 @@ direction), not for routine "may I commit?" checkpoints.
 | 2 | `f5e748a` | feat: add retrieval grading |
 | 3 | `b7380b9` | feat: add corrective query rewriting |
 | 4 | `0fe03ca` | feat: add web search fallback |
+| 5 | _pending_ | feat: add grounded evidence generation |
 
 ## Completed phase detail — Phase 0
 
@@ -270,28 +271,83 @@ Known limitations / deliberate scope boundaries:
   triggered (disabled by default, and gated by both the global flag and the per-request opt-in),
   so it doesn't affect the default `/ask` path at all.
 
-## Current phase detail — Phase 5 (Evidence Builder and Grounded Generation) — in progress
+## Completed phase detail — Phase 5 (Evidence Builder and Grounded Generation)
 
-Scope (from todo.md section 38 / section 14-15):
-- [ ] Stable evidence IDs (`E1`, `E2`, ...) assigned once per `/ask` call and carried unchanged
-  from evidence-building through generation (today, citation numbers are just list position)
-- [ ] Evidence deduplication (near-duplicate passages, not just exact chunk_id/URL matches)
-- [ ] Evidence ranking (a real cross-source ranking — this is where the "final_quality is
-  local-only" limitation from Phase 4 gets addressed, if in scope; otherwise document why not)
-- [ ] Context-size control (cap total evidence text sent to the LLM)
-- [ ] Evidence-aware answer prompt update if the evidence object shape changes
-- [ ] Insufficient-evidence response behavior (formalize what's currently just "empty chunks ->
-  generic fallback string" in `generate_answer`)
-- [ ] Debug evidence display (expose the built evidence layer, not just raw chunks, in `/ask`
-  debug output)
+All checklist items done. Verified via `pytest` (65 passed — 10 new: 6 evidence-builder unit
+tests, 4 generation-layer unit tests) and a live smoke test against real Ollama/`llama3.2:3b`:
+indexed a document, asked a question, and confirmed the response's `sources[0].id` is now
+`"E1"` (matching todo.md section 24's example response format exactly, replacing the plain `"1"`
+positional index used since Phase 1), and the `/ask` debug payload exposes the full built
+evidence layer (id, type, source, location, page, text) distinct from the raw grading/round
+diagnostics already there.
 
-Acceptance criteria: answers cite the evidence used and do not silently mix unsupported
-information into the final response.
+Key artifacts added:
+- `app/generation/evidence.py` — `build_evidence(chunks, max_context_chars)`: assigns stable
+  `E1`/`E2`/... IDs once, dedups near-identical passages (whitespace/case-normalized text
+  equality — catches accidental repeats across local+web sources without a heavier NLP
+  dependency), and caps total evidence text against `MAX_CONTEXT_CHARS` (default 8000, stops
+  adding evidence once the budget is exceeded, but always keeps at least one item even if that
+  single item alone exceeds the budget, so evidence is never dropped down to zero purely because
+  of a small size cap)
+- `app/core/models.py` — new `Evidence` model (`id`, `type`, `source`, `location`, `page`, `text`)
+- `app/generation/prompts.py` / `answer.py` — `build_answer_prompt` and `generate_answer` now
+  take `list[Evidence]` instead of `list[RetrievedChunk]`; prompt citation markers are `[E1]`,
+  `[E2]` (was positional `[1]`, `[2]`); `SourceCitation.id` now comes directly from
+  `Evidence.id`
+- `app/api/routes_ask.py` — `/ask` now runs `build_evidence()` between correction (+ optional
+  web fallback) and generation; `debug: true` exposes the evidence layer directly
+- `tests/unit/test_evidence.py`, `tests/unit/test_generation.py`; updated
+  `tests/integration/test_ask_pipeline.py` to build evidence before calling `generate_answer`
+  (its signature changed)
+
+**Documented, deliberate scope boundary (not a gap to "fix" later without reconsidering):**
+evidence ranking is **not** re-computed here — `build_evidence` preserves whatever order the
+correction controller already produced (local chunks sorted by grader score, then any web
+fallback results appended after, sorted by their own grader score). A true unified cross-source
+ranking would need a principled way to compare vector-similarity scores against web-search
+relevance against grader confidence, which none of Phases 2-4 attempted to solve either — see
+the "Design decision worth remembering" note under Phase 4. This stays an open question for
+Phase 9 (or a documented limitation in the final README) rather than something to hack together
+under time pressure now.
+
+Known limitations / deliberate scope boundaries:
+- No claim verification / hallucination check yet (Phase 6) — the answer generator still just
+  trusts its own grounding to the supplied evidence; nothing double-checks the *output* claims
+  against that evidence after the fact.
+- No formal `ANSWERABLE` / `ANSWERABLE_WITH_CAVEAT` / `INSUFFICIENT_EVIDENCE` decision enum
+  (todo.md section 18) — the existing `retrieval_status` (HIGH/MEDIUM/LOW/WEB_FALLBACK/
+  NO_RESULTS) plus `generate_answer`'s empty-evidence fallback string cover the same practical
+  ground today; the formal decision layer fits naturally alongside Phase 6's grounding score.
+
+## Current phase detail — Phase 6 (Hallucination / Claim Verification) — in progress
+
+Scope (from todo.md section 38 / section 16-17):
+- [ ] Claim extraction (`app/verification/claims.py`) — LLM call that splits a generated answer
+  into discrete factual claims
+- [ ] Claim-to-evidence matching / support grading (`app/verification/verifier.py`) — for each
+  claim, does the evidence actually support it? Structured output per todo.md section 16:
+  `{claim, supported, evidence_ids, confidence}`
+- [ ] Answer grounding score (aggregate over all claims) compared against
+  `ANSWER_GROUNDING_THRESHOLD` (already in config, unused so far)
+- [ ] Unsupported-claim detection feeding into...
+- [ ] Answer correction loop (`app/verification/correction.py`) — regenerate/qualify/remove
+  unsupported claims, bounded by `MAX_ANSWER_CORRECTIONS` (already in config, unused so far)
+- [ ] Final verification pass after correction
+- [ ] Insufficient-evidence fallback if grounding remains poor after max correction attempts
+- [ ] Adversarial hallucination tests (deliberately trigger an unsupported claim and confirm it
+  gets caught)
+- [ ] Wire into `/ask`: generate -> verify -> correct if needed -> verify again -> final answer
+- [ ] Expose verification results in `/ask` debug output; add a `grounding_status` field to
+  `AskResponse` per todo.md section 24's example response shape (`"grounding_status": "SUPPORTED"`)
+
+Acceptance criteria: when a generated answer contains an unsupported factual claim, the system
+detects it and either removes/qualifies it or returns an insufficient-evidence response.
 
 ### Next action when resuming
-1. Re-read this file top to bottom, then skim `todo.md` section 14-15.
-2. Per the current autonomous-mode instruction, implement without pausing for permission unless
-   something is genuinely ambiguous or needs a decision only the user can make.
-3. Implement the checklist above, run tests, do a live smoke test, review `git diff`, commit as
-   `feat: add grounded evidence generation`, update this file's Phase status table and commit
-   log, then move to Phase 6.
+1. Re-read this file top to bottom, then skim `todo.md` sections 16-17.
+2. Continue autonomously per the standing instruction (implement, test, commit, move on) unless
+   something is genuinely ambiguous.
+3. Implement the checklist above, run tests (including at least one adversarial test that
+   fabricates an unsupported claim and confirms it's caught), do a live smoke test, review
+   `git diff`, commit as `feat: add hallucination verification`, update this file's Phase status
+   table and commit log, then move to Phase 7.

@@ -5,6 +5,7 @@ from app.core.dependencies import build_llm_client, build_retriever
 from app.core.models import AskRequest, AskResponse, RetrieveResponse
 from app.correction.controller import apply_web_fallback, run_corrective_retrieval
 from app.generation.answer import generate_answer
+from app.generation.evidence import build_evidence
 
 router = APIRouter(tags=["ask"])
 
@@ -28,9 +29,10 @@ async def ask(request: AskRequest):
     if request.web_fallback:
         correction = apply_web_fallback(request.question, correction, llm, settings)
 
-    answer, sources = generate_answer(request.question, correction.final_chunks, llm)
+    evidence = build_evidence(correction.final_chunks, max_context_chars=settings.max_context_chars)
+    answer, sources = generate_answer(request.question, evidence, llm)
 
-    if not correction.final_chunks:
+    if not evidence:
         retrieval_status = "NO_RESULTS"
     elif correction.web_used:
         retrieval_status = "WEB_FALLBACK"
@@ -43,7 +45,7 @@ async def ask(request: AskRequest):
             "rounds": [r.model_dump() for r in correction.rounds],
             "rewrites": [r.model_dump() for r in correction.rewrites],
             "final_quality": correction.final_quality.model_dump(),
-            "final_chunk_ids": [c.chunk_id for c in correction.final_chunks],
+            "evidence": [e.model_dump() for e in evidence],
             "web_search_triggered": correction.web_search_triggered,
             "web_used": correction.web_used,
             "web_results": [r.model_dump() for r in correction.web_results],

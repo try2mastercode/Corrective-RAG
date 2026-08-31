@@ -63,6 +63,15 @@ class RetrievalRound(BaseModel):
     quality: RetrievalQualityResult
 
 
+class Evidence(BaseModel):
+    id: str  # "E1", "E2", ...
+    type: str  # LOCAL_DOCUMENT | WEB_SOURCE
+    source: str
+    location: str | None = None
+    page: int | None = None
+    text: str
+
+
 class WebSearchResult(BaseModel):
     url: str
     title: str

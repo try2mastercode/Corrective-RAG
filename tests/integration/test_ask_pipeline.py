@@ -5,6 +5,7 @@ from app.core.config import Settings
 from app.core.dependencies import build_llm_client
 from app.embeddings.local import LocalEmbeddingProvider
 from app.generation.answer import generate_answer
+from app.generation.evidence import build_evidence
 from app.ingestion.indexing import index_document
 from app.retrieval.retriever import Retriever
 from app.retrieval.vector_store import ChromaVectorStore
@@ -43,7 +44,8 @@ def test_end_to_end_index_and_ask(tmp_path):
 
     settings = Settings(llm_base_url=OLLAMA_URL, llm_model="llama3.2:3b")
     llm = build_llm_client(settings)
-    answer, sources = generate_answer("Who created the Zarnak Protocol?", chunks, llm)
+    evidence = build_evidence(chunks, max_context_chars=settings.max_context_chars)
+    answer, sources = generate_answer("Who created the Zarnak Protocol?", evidence, llm)
 
     assert answer.strip()
     assert len(sources) >= 1
