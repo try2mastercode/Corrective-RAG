@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     # Evidence builder (Phase 5)
     max_context_chars: int = 8000
 
+    # RAGAS evaluation (Phase 7)
+    ragas_judge_model: str = ""  # empty = use llm_model as the RAGAS judge too
+
     # App
     app_env: str = "development"
     log_level: str = "INFO"

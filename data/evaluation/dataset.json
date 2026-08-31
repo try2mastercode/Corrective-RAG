@@ -1,0 +1,170 @@
+[
+  {
+    "id": "easy_01",
+    "category": "easy",
+    "question": "Who was the engineer who completed the Vantel Bridge?",
+    "ground_truth": "Rosalind Achebe",
+    "expected_sources": ["vantel_bridge.txt"]
+  },
+  {
+    "id": "easy_02",
+    "category": "easy",
+    "question": "In what year was the Corvane Observatory completed?",
+    "ground_truth": "1988",
+    "expected_sources": ["corvane_observatory.txt"]
+  },
+  {
+    "id": "easy_03",
+    "category": "easy",
+    "question": "Who designed the Halvorsen Array?",
+    "ground_truth": "Mireille Tan",
+    "expected_sources": ["halvorsen_array.txt"]
+  },
+  {
+    "id": "easy_04",
+    "category": "easy",
+    "question": "What caused the Bramwell Falls hydroelectric station to be decommissioned?",
+    "ground_truth": "A turbine failure",
+    "expected_sources": ["bramwell_falls.txt"]
+  },
+  {
+    "id": "multi_hop_01",
+    "category": "multi_hop",
+    "question": "What telescope is located on the same mountain where the stone for the Vantel Bridge was quarried?",
+    "ground_truth": "The Corvane Observatory's 4-meter reflecting telescope (Mount Ostrid)",
+    "expected_sources": ["vantel_bridge.txt", "corvane_observatory.txt"]
+  },
+  {
+    "id": "multi_hop_02",
+    "category": "multi_hop",
+    "question": "Which lighthouse sits near the river crossed by the bridge completed in 1962?",
+    "ground_truth": "Skerry Point Lighthouse",
+    "expected_sources": ["vantel_bridge.txt", "skerry_lighthouse.txt"]
+  },
+  {
+    "id": "multi_hop_03",
+    "category": "multi_hop",
+    "question": "What water-system protocol did the engineer who led emergency repairs on the Thornbury Canal towpath collision create?",
+    "ground_truth": "The Zarnak Protocol",
+    "expected_sources": ["thornbury_canal.txt", "zarnak_protocol.txt"]
+  },
+  {
+    "id": "ambiguous_01",
+    "category": "ambiguous",
+    "question": "When did it get automated?",
+    "ground_truth": "1974, referring to the Skerry Point Lighthouse (the only automation event in the corpus)",
+    "expected_sources": ["skerry_lighthouse.txt"]
+  },
+  {
+    "id": "ambiguous_02",
+    "category": "ambiguous",
+    "question": "What happened in 1988?",
+    "ground_truth": "Ambiguous: could refer to the completion of the Corvane Observatory or the construction of the Halvorsen Array, both in 1988",
+    "expected_sources": ["corvane_observatory.txt", "halvorsen_array.txt"]
+  },
+  {
+    "id": "ambiguous_03",
+    "category": "ambiguous",
+    "question": "Who fixed it?",
+    "ground_truth": "Priya Osei, assuming the question refers to the Thornbury Canal towpath repair",
+    "expected_sources": ["thornbury_canal.txt"]
+  },
+  {
+    "id": "hard_retrieval_01",
+    "category": "hard_retrieval",
+    "question": "In what year did Skerry Point stop needing a full-time keeper?",
+    "ground_truth": "1974",
+    "expected_sources": ["skerry_lighthouse.txt"]
+  },
+  {
+    "id": "hard_retrieval_02",
+    "category": "hard_retrieval",
+    "question": "What natural disaster destroyed the crossing that came before the Vantel Bridge?",
+    "ground_truth": "A flood, in 1958",
+    "expected_sources": ["vantel_bridge.txt"]
+  },
+  {
+    "id": "hard_retrieval_03",
+    "category": "hard_retrieval",
+    "question": "Why did Bramwell Falls stop generating power?",
+    "ground_truth": "A turbine failure led to its decommissioning",
+    "expected_sources": ["bramwell_falls.txt"]
+  },
+  {
+    "id": "unanswerable_01",
+    "category": "unanswerable",
+    "question": "What ingredients are used in traditional Neapolitan pizza dough?",
+    "ground_truth": "Not answerable from the provided corpus",
+    "expected_sources": []
+  },
+  {
+    "id": "unanswerable_02",
+    "category": "unanswerable",
+    "question": "Who won the most recent Nobel Prize in Physics?",
+    "ground_truth": "Not answerable from the provided corpus",
+    "expected_sources": []
+  },
+  {
+    "id": "unanswerable_03",
+    "category": "unanswerable",
+    "question": "What is the boiling point of ethanol?",
+    "ground_truth": "Not answerable from the provided corpus",
+    "expected_sources": []
+  },
+  {
+    "id": "unanswerable_04",
+    "category": "unanswerable",
+    "question": "How many employees does Vantel Corp have?",
+    "ground_truth": "Not answerable from the provided corpus",
+    "expected_sources": []
+  },
+  {
+    "id": "distractor_01",
+    "category": "distractor",
+    "question": "What year was the telescope at the Halvorsen Array completed?",
+    "ground_truth": "1988 (note: the Corvane Observatory is a plausible distractor -- also a telescope completed in 1988, but a different facility)",
+    "expected_sources": ["halvorsen_array.txt"]
+  },
+  {
+    "id": "distractor_02",
+    "category": "distractor",
+    "question": "What was completed in 1962 near the Kest River?",
+    "ground_truth": "The Vantel Bridge (note: Bramwell Falls' '1962 turbines' is a plausible distractor sharing the same year)",
+    "expected_sources": ["vantel_bridge.txt"]
+  },
+  {
+    "id": "distractor_03",
+    "category": "distractor",
+    "question": "Which engineer, Priya Osei or Rosalind Achebe, led repairs on a canal towpath?",
+    "ground_truth": "Priya Osei",
+    "expected_sources": ["thornbury_canal.txt"]
+  },
+  {
+    "id": "distractor_04",
+    "category": "distractor",
+    "question": "Was the lighthouse or the observatory automated in 1974?",
+    "ground_truth": "The lighthouse (Skerry Point); the observatory was completed in 1988, an unrelated fact",
+    "expected_sources": ["skerry_lighthouse.txt"]
+  },
+  {
+    "id": "fresh_information_01",
+    "category": "fresh_information",
+    "question": "What year did the first iPhone get released?",
+    "ground_truth": "2007 (requires web search -- not in the local corpus)",
+    "expected_sources": []
+  },
+  {
+    "id": "fresh_information_02",
+    "category": "fresh_information",
+    "question": "Who is the current Secretary-General of the United Nations?",
+    "ground_truth": "Requires a live web search; answer changes over time and is not in the local corpus",
+    "expected_sources": []
+  },
+  {
+    "id": "fresh_information_03",
+    "category": "fresh_information",
+    "question": "What is the most recently released stable version of the Python programming language?",
+    "ground_truth": "Requires a live web search; answer changes over time and is not in the local corpus",
+    "expected_sources": []
+  }
+]

@@ -1,0 +1,150 @@
+{
+  "report": {
+    "dataset_size": 2,
+    "baseline_metrics": {
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.9531555859913046,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    "crag_metrics": {
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.9422575235631712,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    "improvement_pct": {
+      "answer_relevancy": -1.1433665802628812,
+      "context_precision": 0.0,
+      "context_recall": 0.0,
+      "faithfulness": 0.0
+    },
+    "latency": {
+      "baseline_avg": 21.55500000000029,
+      "baseline_p50": 21.55500000000029,
+      "baseline_p95": 21.632400000002963,
+      "crag_avg": 118.05450000000201,
+      "crag_p50": 118.05450000000201,
+      "crag_p95": 124.36124999999848
+    },
+    "average_retrieval_rounds": 2,
+    "rewrite_rate": 1.0,
+    "web_fallback_rate": 0.0,
+    "answer_correction_rate": 0.0,
+    "insufficient_evidence_rate": 0.0,
+    "failure_examples": [
+      {
+        "question_id": "easy_01",
+        "category": "easy",
+        "question": "Who was the engineer who completed the Vantel Bridge?",
+        "ground_truth": "Rosalind Achebe",
+        "answer": "Rosalind Achebe.",
+        "retrieval_status": "LOW",
+        "grounding_status": "SUPPORTED",
+        "retrieval_rounds": 2,
+        "rewrite_used": true,
+        "web_used": false,
+        "answer_corrected": false
+      },
+      {
+        "question_id": "easy_02",
+        "category": "easy",
+        "question": "In what year was the Corvane Observatory completed?",
+        "ground_truth": "1988",
+        "answer": "The Corvane Observatory was completed in 1988.",
+        "retrieval_status": "LOW",
+        "grounding_status": "SUPPORTED",
+        "retrieval_rounds": 2,
+        "rewrite_used": true,
+        "web_used": false,
+        "answer_corrected": false
+      }
+    ]
+  },
+  "baseline_records": [
+    {
+      "question_id": "easy_01",
+      "category": "easy",
+      "question": "Who was the engineer who completed the Vantel Bridge?",
+      "ground_truth": "Rosalind Achebe",
+      "answer": "Rosalind Achebe.",
+      "contexts": [
+        "The Vantel Bridge was completed in 1962 by engineer Rosalind Achebe, spanning the Kest River. Its stone was quarried from Mount Ostrid. The bridge replaced an earlier wooden crossing that was destroyed in a flood in 1958.",
+        "The Skerry Point Lighthouse was automated in 1974, ending the need for a resident keeper. Its original Fresnel lens, installed in 1901, remains in operation today. The lighthouse sits at the mouth of the Kest River, near where the Vantel Bridge crosses further inland.",
+        "The Zarnak Protocol was created in 1994 by engineer Priya Osei to coordinate emergency water shutoffs in the Kelvinbridge municipal water system.",
+        "The Bramwell Falls hydroelectric station was decommissioned in 2011 after a turbine failure. Chief engineer Dana Kowalczyk oversaw the shutdown and later published a report recommending replacement of the original 1962 turbines.",
+        "The Thornbury Canal towpath was resurfaced in 2016 to improve accessibility for cyclists. In 2019, a barge collision damaged a section of the towpath near the second lock. Engineer Priya Osei led the emergency repair team, completing repairs within three weeks.",
+        "The Corvane Observatory was completed in 1988 on the summit of Mount Ostrid. It houses a 4-meter reflecting telescope used primarily for exoplanet research.",
+        "The Halvorsen Array is a radio telescope built in 1988 near Ny-Alesund. It was designed by astrophysicist Mireille Tan to study cosmic microwave background fluctuations. Unlike the Corvane Observatory, the Halvorsen Array does not use a reflecting mirror design.",
+        "The city council approved a new zoning ordinance for the riverside district, allowing mixed-use buildings up to six stories starting next fiscal year."
+      ],
+      "latency_seconds": 21.64100000000326,
+      "retrieval_status": null,
+      "grounding_status": null,
+      "retrieval_rounds": 1,
+      "rewrite_used": false,
+      "web_used": false,
+      "answer_corrected": false
+    },
+    {
+      "question_id": "easy_02",
+      "category": "easy",
+      "question": "In what year was the Corvane Observatory completed?",
+      "ground_truth": "1988",
+      "answer": "The Corvane Observatory was completed in 1988.",
+      "contexts": [
+        "The Corvane Observatory was completed in 1988 on the summit of Mount Ostrid. It houses a 4-meter reflecting telescope used primarily for exoplanet research.",
+        "The Halvorsen Array is a radio telescope built in 1988 near Ny-Alesund. It was designed by astrophysicist Mireille Tan to study cosmic microwave background fluctuations. Unlike the Corvane Observatory, the Halvorsen Array does not use a reflecting mirror design.",
+        "The Skerry Point Lighthouse was automated in 1974, ending the need for a resident keeper. Its original Fresnel lens, installed in 1901, remains in operation today. The lighthouse sits at the mouth of the Kest River, near where the Vantel Bridge crosses further inland.",
+        "The Vantel Bridge was completed in 1962 by engineer Rosalind Achebe, spanning the Kest River. Its stone was quarried from Mount Ostrid. The bridge replaced an earlier wooden crossing that was destroyed in a flood in 1958.",
+        "The Zarnak Protocol was created in 1994 by engineer Priya Osei to coordinate emergency water shutoffs in the Kelvinbridge municipal water system.",
+        "The Bramwell Falls hydroelectric station was decommissioned in 2011 after a turbine failure. Chief engineer Dana Kowalczyk oversaw the shutdown and later published a report recommending replacement of the original 1962 turbines.",
+        "The Thornbury Canal towpath was resurfaced in 2016 to improve accessibility for cyclists. In 2019, a barge collision damaged a section of the towpath near the second lock. Engineer Priya Osei led the emergency repair team, completing repairs within three weeks.",
+        "The city council approved a new zoning ordinance for the riverside district, allowing mixed-use buildings up to six stories starting next fiscal year."
+      ],
+      "latency_seconds": 21.468999999997322,
+      "retrieval_status": null,
+      "grounding_status": null,
+      "retrieval_rounds": 1,
+      "rewrite_used": false,
+      "web_used": false,
+      "answer_corrected": false
+    }
+  ],
+  "crag_records": [
+    {
+      "question_id": "easy_01",
+      "category": "easy",
+      "question": "Who was the engineer who completed the Vantel Bridge?",
+      "ground_truth": "Rosalind Achebe",
+      "answer": "Rosalind Achebe.",
+      "contexts": [
+        "The Vantel Bridge was completed in 1962 by engineer Rosalind Achebe, spanning the Kest River. Its stone was quarried from Mount Ostrid. The bridge replaced an earlier wooden crossing that was destroyed in a flood in 1958."
+      ],
+      "latency_seconds": 125.06199999999808,
+      "retrieval_status": "LOW",
+      "grounding_status": "SUPPORTED",
+      "retrieval_rounds": 2,
+      "rewrite_used": true,
+      "web_used": false,
+      "answer_corrected": false
+    },
+    {
+      "question_id": "easy_02",
+      "category": "easy",
+      "question": "In what year was the Corvane Observatory completed?",
+      "ground_truth": "1988",
+      "answer": "The Corvane Observatory was completed in 1988.",
+      "contexts": [
+        "The Corvane Observatory was completed in 1988 on the summit of Mount Ostrid. It houses a 4-meter reflecting telescope used primarily for exoplanet research."
+      ],
+      "latency_seconds": 111.04700000000594,
+      "retrieval_status": "LOW",
+      "grounding_status": "SUPPORTED",
+      "retrieval_rounds": 2,
+      "rewrite_used": true,
+      "web_used": false,
+      "answer_corrected": false
+    }
+  ]
+}

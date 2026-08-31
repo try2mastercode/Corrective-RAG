@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from app.core.config import get_settings
 from app.core.dependencies import build_llm_client, build_retriever
 from app.core.models import AskRequest, AskResponse, RetrieveResponse, VerificationOutcome, VerificationResult
-from app.correction.controller import apply_web_fallback, run_corrective_retrieval
+from app.correction.controller import apply_web_fallback, compute_retrieval_status, run_corrective_retrieval
 from app.generation.answer import generate_answer
 from app.generation.evidence import build_evidence
 from app.verification.verifier import verify_and_correct_answer
@@ -45,12 +45,7 @@ async def ask(request: AskRequest):
     else:
         outcome = verify_and_correct_answer(request.question, evidence, draft_answer, llm, settings)
 
-    if not evidence:
-        retrieval_status = "NO_RESULTS"
-    elif correction.web_used:
-        retrieval_status = "WEB_FALLBACK"
-    else:
-        retrieval_status = correction.final_quality.decision
+    retrieval_status = compute_retrieval_status(evidence, correction)
 
     debug_info = None
     if request.debug:

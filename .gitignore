@@ -15,10 +15,12 @@ dist/
 # Data
 data/raw/*
 data/processed/*
-data/evaluation/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
-!data/evaluation/.gitkeep
+
+# Evaluation dataset/corpus/reports are checked in deliberately (Phase 7); only the generated
+# eval vector store is excluded.
+data/evaluation/eval_chroma_db/
 
 # Vector store / model caches
 chroma_db/

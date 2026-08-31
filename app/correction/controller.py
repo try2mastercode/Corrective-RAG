@@ -12,6 +12,14 @@ from app.web.search import compute_web_chunk_id, web_search
 logger = logging.getLogger(__name__)
 
 
+def compute_retrieval_status(evidence: list, correction: CorrectiveRetrievalResult) -> str:
+    if not evidence:
+        return "NO_RESULTS"
+    if correction.web_used:
+        return "WEB_FALLBACK"
+    return correction.final_quality.decision
+
+
 def _quality(settings: Settings, graded: list[GradedChunk]):
     return calculate_retrieval_quality(
         graded,
