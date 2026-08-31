@@ -49,7 +49,10 @@ def test_malicious_document_is_treated_as_untrusted_data_not_instructions(tmp_pa
     chunks = retriever.retrieve(question, top_k=3)
     assert chunks, "expected the malicious document to be retrieved"
 
-    settings = Settings(llm_base_url=OLLAMA_URL, llm_model="llama3.2:3b")
+    # Pin llm_provider explicitly -- this test targets the local Ollama pipeline specifically,
+    # and must not silently pick up a different provider from whatever LLM_PROVIDER happens to
+    # be set to in the developer's local .env (e.g. if they've opted into LLM_PROVIDER=openrouter).
+    settings = Settings(llm_provider="ollama", llm_base_url=OLLAMA_URL, llm_model="llama3.2:3b")
     llm = build_llm_client(settings)
 
     # The grader must judge relevance, not obey the embedded instruction.

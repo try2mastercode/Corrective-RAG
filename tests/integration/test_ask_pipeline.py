@@ -42,7 +42,10 @@ def test_end_to_end_index_and_ask(tmp_path):
     assert len(chunks) >= 1
     assert "Zarnak" in chunks[0].text
 
-    settings = Settings(llm_base_url=OLLAMA_URL, llm_model="llama3.2:3b")
+    # Pin llm_provider explicitly -- this test targets the local Ollama pipeline specifically,
+    # and must not silently pick up a different provider from whatever LLM_PROVIDER happens to
+    # be set to in the developer's local .env (e.g. if they've opted into LLM_PROVIDER=openrouter).
+    settings = Settings(llm_provider="ollama", llm_base_url=OLLAMA_URL, llm_model="llama3.2:3b")
     llm = build_llm_client(settings)
     evidence = build_evidence(chunks, max_context_chars=settings.max_context_chars)
     answer, sources = generate_answer("Who created the Zarnak Protocol?", evidence, llm)

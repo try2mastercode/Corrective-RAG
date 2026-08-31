@@ -119,11 +119,16 @@ To switch:
    ```env
    LLM_PROVIDER=openrouter
    OPENROUTER_API_KEY=sk-or-v1-...your-key-here...
-   OPENROUTER_MODEL=meta-llama/llama-3.1-8b-instruct:free
+   OPENROUTER_MODEL=liquid/lfm-2.5-2.6b:free
    ```
 3. Check [openrouter.ai/models](https://openrouter.ai/models?max_price=0) for the current list
    of free models (marked `:free`) — free-tier model availability and exact IDs change over
-   time, so confirm the one in `OPENROUTER_MODEL` above is still live before relying on it.
+   time, so confirm the one in `OPENROUTER_MODEL` above is still live before relying on it. In
+   testing, popular free models (e.g. `meta-llama/llama-3.1-8b-instruct:free`) returned
+   `429 Too Many Requests` ("temporarily rate-limited upstream" — the shared free pool for that
+   specific model was saturated, not an account problem) while smaller/less-popular free models
+   worked immediately. If you hit a 429, try a different free model from the live list rather
+   than assuming your key is broken.
 4. Restart the backend. `LLM_PROVIDER` controls only the pipeline's answering/grading/
    verification model — embeddings (`sentence-transformers`) and the vector store (Chroma)
    always stay local regardless of this setting.
@@ -131,7 +136,7 @@ To switch:
 Free-tier rate limits on aggregators are usually tight (this pipeline can make 5-15+ model calls
 per question — grading, rewriting, claim verification — so a single question can burn through a
 meaningful chunk of a daily free quota). If you hit rate limits, the fix is either a paid
-OpenRouter tier or switching back to `LLM_PROVIDER=ollama`.
+OpenRouter tier, a different free model, or switching back to `LLM_PROVIDER=ollama`.
 
 ## Architecture
 

@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     # OpenRouter (only used when llm_provider="openrouter" -- see README for setup)
     openrouter_api_key: str = ""
-    openrouter_model: str = "meta-llama/llama-3.1-8b-instruct:free"
+    openrouter_model: str = "liquid/lfm-2.5-2.6b:free"
 
     # Embeddings
     embedding_provider: str = "local"
