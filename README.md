@@ -7,8 +7,6 @@ grounded in that evidence, and checks the answer's claims for support before ret
 Retrieval and answer quality are measured with RAGAS, comparing a baseline RAG pipeline against
 the full corrective pipeline (CRAG).
 
-See [todo.md](todo.md) for the original specification and [PROGRESS.md](PROGRESS.md) for the
-full phase-by-phase build history, decisions, and debugging notes.
 
 ## Status
 
