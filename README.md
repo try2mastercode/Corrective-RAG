@@ -66,19 +66,23 @@ Adjust values in `.env` as needed (model names, thresholds, `WEB_SEARCH_ENABLED`
 
 ## Running
 
+Make sure `ollama serve` is running (or Ollama is installed as a service), then start both the
+backend and frontend with one command:
+
 ```bash
-# 1. Start the local LLM server (if not already running as a service)
-ollama serve
-
-# 2. Start the backend
-uvicorn app.main:app --reload
-
-# 3. Serve the frontend (any static file server works)
-python -m http.server 5500 --directory frontend
+python -m scripts.run_dev
 ```
 
-Open `http://localhost:5500`, set the API base URL to your backend's address (default
-`http://127.0.0.1:8000`), and use the Ask / Documents / Evaluation tabs.
+This starts the backend on `http://127.0.0.1:8000` and the frontend on `http://localhost:5500`.
+Press Ctrl+C to stop both. Open `http://localhost:5500` in your browser and use the Ask /
+Documents / Evaluation tabs.
+
+To run them separately instead (e.g. for separate log output):
+
+```bash
+uvicorn app.main:app --reload --reload-dir app       # backend
+python -m http.server 5500 --directory frontend      # frontend, in another terminal
+```
 
 Check the backend directly:
 
