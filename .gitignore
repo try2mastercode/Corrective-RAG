@@ -33,6 +33,9 @@ models_cache/
 *.log
 logs/
 
+# Project planning doc (not meant for the public repo)
+todo.md
+
 # IDE / OS
 .vscode/
 .idea/
