@@ -16,7 +16,6 @@ Benchmarked against a plain baseline RAG pipeline with RAGAS — see [Evaluation
 - Plain HTML/CSS/JS frontend, no build step
 - RAGAS for evaluation
 
-No Docker.
 
 ## Setup
 
