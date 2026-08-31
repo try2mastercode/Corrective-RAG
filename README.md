@@ -1,325 +1,128 @@
 # Corrective RAG — Self-Evaluating Local Llama
 
-A local-first Retrieval-Augmented Generation (RAG) system that doesn't blindly trust its own
-retrieval. It grades retrieved chunks for relevance, rewrites weak queries and re-retrieves,
-optionally falls back to web search, builds a normalized evidence layer, generates an answer
-grounded in that evidence, and checks the answer's claims for support before returning it.
-Retrieval and answer quality are measured with RAGAS, comparing a baseline RAG pipeline against
-the full corrective pipeline (CRAG).
+A RAG pipeline that double-checks itself: grades its own retrieval, rewrites the query and
+retries if the results are weak, falls back to web search if it has to, and verifies every
+claim in the final answer against the evidence before showing it to you. Runs fully local on
+Ollama by default, with Groq/OpenRouter as opt-in cloud fallbacks.
 
-See [todo.md](todo.md) for the original specification and [PROGRESS.md](PROGRESS.md) for the
-full phase-by-phase build history, decisions, and debugging notes.
-
-## Status
-
-**All 10 phases (0–9) complete.** Full pipeline: ingestion → chunking → embeddings → retrieval →
-grading → corrective query rewriting → web fallback → evidence building → grounded generation →
-claim verification/correction → RAGAS evaluation → vanilla JS frontend → observability/hardening.
+Benchmarked against a plain baseline RAG pipeline with RAGAS — see [Evaluation](#evaluation).
 
 ## Stack
 
-- **Backend:** Python 3.11 + FastAPI
-- **LLM:** local by default, via [Ollama](https://ollama.com) — `llama3.2:3b` (pipeline),
-  `qwen2.5:7b-instruct` (RAGAS judge — see [Evaluation](#evaluation)). Optionally
-  [Groq](https://groq.com) or [OpenRouter](https://openrouter.ai) (cloud) instead — see
-  [Using a cloud LLM provider instead of a local
-  model](#using-a-cloud-llm-provider-instead-of-a-local-model)
-- **Embeddings:** local, in-process via `sentence-transformers` — `BAAI/bge-small-en-v1.5`
-- **Vector store:** Chroma
-- **Web search:** DuckDuckGo (via `ddgs`), no API key
-- **Frontend:** HTML + CSS + vanilla JavaScript (no framework, no build step)
-- **Evaluation:** RAGAS `0.1.21` (pinned — see [Limitations](#limitations))
+- FastAPI backend (Python 3.11)
+- Ollama for the LLM (`llama3.2:3b`), Groq/OpenRouter optional
+- `sentence-transformers` for embeddings, Chroma for the vector store — both local always
+- DuckDuckGo for web fallback, no API key
+- Plain HTML/CSS/JS frontend, no build step
+- RAGAS for evaluation
 
-No Docker or containers are used anywhere in this project.
+No Docker.
 
-## Installation
-
-### Prerequisites
-
-- Python 3.11 (a different version may not have compatible wheels for `torch` /
-  `sentence-transformers` / `chromadb` / `ragas`)
-- [Ollama](https://ollama.com) installed and running locally
-
-### 1. Pull the local models
+## Setup
 
 ```bash
-ollama pull llama3.2:3b
-ollama pull qwen2.5:7b-instruct
-```
+git clone https://github.com/tharunsridhar/Corrective-RAG.git
+cd Corrective-RAG
 
-The second model is only used as RAGAS's judge during evaluation — skip it if you don't plan to
-run `scripts/evaluate.py` (the app itself still needs `llama3.2:3b`, or whatever `LLM_MODEL` you
-configure).
-
-### 2. Create a virtual environment and install dependencies
-
-```bash
 py -3.11 -m venv .venv
 .venv\Scripts\activate
 pip install -e ".[dev]"
-```
 
-### 3. Configure environment variables
-
-```bash
 copy .env.example .env
 ```
 
-Adjust values in `.env` as needed (model names, thresholds, `WEB_SEARCH_ENABLED`, etc.).
+Using the local model? Pull it first:
 
-## Running
+```bash
+ollama pull llama3.2:3b
+ollama pull qwen2.5:7b-instruct   # only if you'll run the evaluation
+```
 
-Make sure `ollama serve` is running (or Ollama is installed as a service), then start both the
-backend and frontend with one command:
+## Running it
 
 ```bash
 python -m scripts.run_dev
 ```
 
-This starts the backend on `http://127.0.0.1:8000` and the frontend on `http://localhost:5500`.
-Press Ctrl+C to stop both. Open `http://localhost:5500` in your browser and use the Ask /
-Documents / Evaluation tabs.
+Backend on `:8000`, frontend on `:5500`. Ctrl+C stops both. Open `http://localhost:5500`.
 
-To run them separately instead (e.g. for separate log output):
+Separately, if you want split logs:
 
 ```bash
-uvicorn app.main:app --reload --reload-dir app       # backend
-python -m http.server 5500 --directory frontend      # frontend, in another terminal
+uvicorn app.main:app --reload --reload-dir app
+python -m http.server 5500 --directory frontend
 ```
 
-Check the backend directly:
-
-```bash
-curl http://127.0.0.1:8000/health
-```
-
-### CLI usage
+Or skip the UI entirely:
 
 ```bash
 python -m scripts.ingest ./data/raw/some_document.pdf
 python -m scripts.ask "What does the document say about X?"
-python -m scripts.evaluate --limit 5              # small interactive evaluation run
-python -m scripts.benchmark --limit 10            # fast CRAG-only latency/rate check, no RAGAS
 ```
 
-## Using a cloud LLM provider instead of a local model
+## Cloud LLM (optional)
 
-By default this project runs entirely on-device (Ollama), which is the point of it being called
-"local-first" — nothing about your documents or questions leaves your machine. Two cloud
-providers are supported instead, both opt-in: [OpenRouter](https://openrouter.ai) and
-[Groq](https://groq.com). Switching to either means your questions and document content **do**
-leave your machine and go to a third party — that's a real trade-off, not a free upgrade.
-Embeddings (`sentence-transformers`) and the vector store (Chroma) always stay local regardless
-of which `LLM_PROVIDER` is selected.
+Local by default — nothing leaves your machine unless you turn this on. Flip it and your
+questions and documents go to whichever provider you pick. Embeddings and the vector store
+stay local regardless.
 
-**Recommendation based on hands-on testing:** prefer Groq over OpenRouter for this project. Both
-are free with no credit card, but OpenRouter's free models draw from a pool shared with every
-other free user, which we hit real `429` rate limits against during testing (including one
-where the error was hidden inside an HTTP 200 response body, not even a normal 429 status).
-Groq's free tier is a per-account quota instead, giving far more practical daily headroom for
-this pipeline's many-calls-per-question pattern (roughly 10x more requests/day at last check),
-and Groq's custom inference hardware made a single question complete in ~3.5 seconds
-end-to-end in testing, versus 30-120s on local Ollama or 54s+ on OpenRouter (including
-rate-limit retries).
+I tried both. Groq's the better pick — OpenRouter's free tier shares a pool and rate-limits
+fast, Groq gives you your own quota and answers in a few seconds instead of a minute-plus.
 
-### Groq setup
-
-1. **Get a free API key yourself** at [console.groq.com/keys](https://console.groq.com/keys) —
-   no credit card required. I can't create the account or generate the key for you.
-2. Set these in `.env`:
-   ```env
-   LLM_PROVIDER=groq
-   GROQ_API_KEY=gsk_...your-key-here...
-   GROQ_MODEL=openai/gpt-oss-20b
-   ```
-3. Check [console.groq.com/docs/models](https://console.groq.com/docs/models) for the current
-   model list — exact IDs change over time, so confirm `GROQ_MODEL` above is still live. Avoid
-   "thinking" models (e.g. Qwen's reasoning variants) for this pipeline — they prepend visible
-   chain-of-thought text before the actual JSON output, which this pipeline's parsers don't
-   expect.
-4. Restart the backend.
-
-### OpenRouter setup
-
-1. **Get a free API key yourself** at [openrouter.ai/keys](https://openrouter.ai/keys) — no
-   credit card required.
-2. Set these in `.env`:
-   ```env
-   LLM_PROVIDER=openrouter
-   OPENROUTER_API_KEY=sk-or-v1-...your-key-here...
-   OPENROUTER_MODEL=liquid/lfm-2.5-2.6b:free
-   ```
-3. Check [openrouter.ai/models](https://openrouter.ai/models?max_price=0) for the current list
-   of free models (marked `:free`) — free-tier model availability and exact IDs change over
-   time, and popular free models are prone to shared-pool rate limits (`429`, sometimes embedded
-   in an HTTP 200 body rather than a real 429 status — both are handled with automatic retry, but
-   persistent saturation on one model means switching to a different free model, not a broken key).
-4. Restart the backend.
-
-## Architecture
-
-```text
-                         +----------------+
-                         |     User       |
-                         +-------+--------+
-                                 |
-                                 v
-                    +------------------------+
-                    | Vanilla JS Frontend /   |
-                    | FastAPI /ask endpoint   |
-                    +------------+-----------+
-                                 |
-                                 v
-                    +------------------------+
-                    | Corrective Controller   |
-                    | (app/correction/)       |
-                    +------------+-----------+
-                                 |
-              +------------------+------------------+
-              |                                      |
-              v                                      |
-      +---------------+                              |
-      | Chroma Vector |                               |
-      | Store         |                               |
-      +------+--------+                               |
-             |                                         |
-             v                                         |
-      +---------------+                                |
-      | Retriever     |                                |
-      +------+--------+                                |
-             |                                          |
-             v                                          |
-      +---------------+     weak      +---------------+ |
-      | Chunk Grader  |-------------->| Query Rewriter| |
-      +------+--------+               +-------+-------+ |
-             | strong                         |          |
-             |                                v          |
-             |                       retrieve again ------
-             |                                |
-             +-----------------<--------------+
-                                 |
-                        still weak & enabled?
-                                 |
-                                 v
-                       +------------------+
-                       | Web Search        |
-                       | (DuckDuckGo)      |
-                       +--------+---------+
-                                 |
-                                 v
-                       +------------------+
-                       | Evidence Builder  |
-                       | (dedup, E1/E2 IDs,|
-                       |  context cap)     |
-                       +--------+---------+
-                                 |
-                                 v
-                       +------------------+
-                       | Local Llama       |
-                       | (answer generator)|
-                       +--------+---------+
-                                 |
-                                 v
-                       +------------------+
-                       | Claim Extraction /|
-                       | Verification /    |
-                       | Correction Loop   |
-                       +--------+---------+
-                                 |
-                                 v
-                              Answer
-                     (with sources, retrieval_status,
-                      grounding_status, run_id)
+```env
+LLM_PROVIDER=groq
+GROQ_API_KEY=gsk_...
+GROQ_MODEL=allam-2-7b
 ```
 
-Module layout (`app/`): `ingestion/` (loaders, chunking, indexing) · `embeddings/` (local
-sentence-transformers) · `retrieval/` (vector store, retriever, grader) · `correction/` (query
-rewriter, corrective + web-fallback controller) · `web/` (DuckDuckGo search) · `generation/`
-(evidence builder, prompts, answer generation) · `verification/` (claim extraction, verification,
-correction) · `evaluation/` (dataset, RAGAS runner, reports) · `core/` (config, models,
-dependency wiring, request tracing) · `api/` (FastAPI routes) · `llm/` (Ollama client, shared
-JSON-parsing helper).
+Key's free at [console.groq.com/keys](https://console.groq.com/keys), no card. Stay away from
+"reasoning" models (`openai/gpt-oss-20b`, `groq/compound-mini`) — they spend the token budget
+on hidden thinking output and hit rate limits fast. `allam-2-7b` is plain and reliable.
 
-## Example walkthrough
+OpenRouter, if you'd rather:
 
-```text
-Q: "Who designed the Halvorsen Array?"
-
-1. Retrieve top-k chunks from Chroma.
-2. Grade each chunk RELEVANT / PARTIALLY_RELEVANT / IRRELEVANT; compute an overall quality score.
-3. If quality isn't HIGH: rewrite the query, retrieve again (bounded by MAX_RETRIEVAL_ROUNDS).
-4. If still weak and web fallback is enabled + requested: search DuckDuckGo, grade those results too.
-5. Build a deduplicated, size-capped evidence list with stable IDs (E1, E2, ...).
-6. Generate an answer citing those IDs, evidence explicitly marked untrusted/non-instructional
-   in the prompt (protects against prompt injection in retrieved or web content).
-7. Extract the answer's factual claims and verify each against the evidence.
-8. If any claim is unsupported: regenerate a corrected answer (bounded by
-   MAX_ANSWER_CORRECTIONS), or prefix the answer with an explicit uncertainty notice if
-   correction doesn't resolve it.
-9. Return the answer with sources, retrieval_status, grounding_status, and a run_id.
+```env
+LLM_PROVIDER=openrouter
+OPENROUTER_API_KEY=sk-or-v1-...
+OPENROUTER_MODEL=liquid/lfm-2.5-2.6b:free
 ```
 
-Try it with `debug: true` on `POST /ask` (or the frontend's Debug mode checkbox) to see every
-intermediate step: retrieval rounds, rewrites, web results, the built evidence, and per-claim
-verification results.
+Restart the backend either way.
+
+## How it works
+
+```
+question
+   → retrieve top-k chunks (Chroma)
+   → grade relevance
+       weak?  → rewrite query → retrieve again
+       still weak? → web search fallback
+   → build evidence list (deduped, cited E1/E2/...)
+   → generate answer
+   → extract claims → verify against evidence
+       unsupported? → correct and re-verify
+   → answer + sources + status
+```
+
+Set `debug: true` on `/ask` (or tick "Debug mode" in the UI) to see every step.
 
 ## Evaluation
 
 ```bash
-python -m scripts.evaluate --limit 5              # quick check
-python -m scripts.evaluate                        # full 24-question dataset (see below for time)
-python -m scripts.evaluate --web-fallback --output data/evaluation/report_web.md
+python -m scripts.evaluate --limit 5      # quick
+python -m scripts.evaluate                # full set, ~3hrs on CPU
 ```
 
-This indexes `data/evaluation/corpus/` (8 short fictional documents, deliberately cross-
-referenced and overlapping for multi-hop/distractor questions), runs every question in
-`data/evaluation/dataset.json` through both the baseline pipeline (retrieve → generate, no
-grading/correction/verification) and the full CRAG pipeline, computes RAGAS metrics
-(faithfulness, answer relevancy, context precision, context recall) on both, and writes a
-Markdown + JSON report.
+Runs baseline and CRAG over the same questions, scores both with RAGAS, writes a report. RAGAS
+needs a bigger model to judge with (`qwen2.5:7b-instruct`) — the small pipeline model gives
+unreliable scores judging its own work, and the bigger one is slow on CPU, hence the runtime.
+A sample report's checked in at [`data/evaluation/report.md`](data/evaluation/report.md).
 
-**RAGAS uses a separate, larger local judge model** (`RAGAS_JUDGE_MODEL`, default
-`qwen2.5:7b-instruct`) rather than the pipeline's own `llama3.2:3b`. RAGAS does its own internal
-multi-step LLM prompting to compute metrics, and testing showed the smaller model produces
-unreliable scores (a `faithfulness: 0.0` for an obviously faithful answer) while the larger model
-is accurate but much slower on CPU (~55-60s per metric per question). **A full run of the
-24-question dataset with all 4 metrics across both pipelines takes on the order of 3 hours on
-CPU-only hardware** — use `--limit` for interactive checks, or `scripts/benchmark.py` for a fast
-RAGAS-free latency/behavior check. A real (small) run's output is checked in at
-[`data/evaluation/report.md`](data/evaluation/report.md).
+## Known limitations
 
-## Limitations
-
-Accumulated across the build (see [PROGRESS.md](PROGRESS.md) for the full reasoning behind each):
-
-- **Evaluation dataset is 24 questions**, not the 50+ todo.md asks for. Extending it is
-  mechanical (more JSON entries in `data/evaluation/dataset.json` against a larger corpus), but
-  every question added multiplies the multi-hour RAGAS runtime described above.
-- **RAGAS is pinned to `0.1.21`** with `langchain==0.2.17` / `langchain-community==0.2.19`. The
-  newest RAGAS (0.4.x) hard-imports a `langchain_community` submodule that no longer exists in
-  current `langchain-community` releases and fails at import time. If upgrading RAGAS, expect to
-  re-verify this whole chain.
-- **Evidence ranking doesn't unify across sources.** Local chunks are ranked by grader score;
-  web-fallback results are appended after, ranked only among themselves. There's no principled
-  way implemented to compare vector-similarity scores against web-search rank against grader
-  confidence on one scale.
-- **No formal `ANSWERABLE` / `ANSWERABLE_WITH_CAVEAT` / `INSUFFICIENT_EVIDENCE` decision enum.**
-  `retrieval_status` (HIGH/MEDIUM/LOW/WEB_FALLBACK/NO_RESULTS) and `grounding_status`
-  (SUPPORTED/UNSUPPORTED) together cover the same practical ground today.
-- **URL-based document ingestion isn't implemented** — only file uploads (PDF/TXT/MD/DOCX).
-  todo.md lists URL ingestion as "where useful"; only web *search* fallback was built.
-  Correspondingly, URL-content sanitization for that ingestion path doesn't apply here.
-- **No rate limiting or hardened request-size streaming limits** — this is an explicitly
-  localhost-only, single-user local tool (todo.md's rate-limiting requirement is itself
-  conditional on "if exposed outside localhost"). Upload size is capped (20MB) at the application
-  level after the body is read, not via streaming enforcement.
-- **The in-memory run trace store** (`GET /runs/{run_id}`, `GET /metrics`) is not persisted —
-  it resets on backend restart and keeps only the most recent 500 runs.
-- **Retrieval quality scoring can look worse than the actual answer is** on small/diverse
-  corpora: with the default `TOP_K=8` against an 8-document evaluation corpus, every query
-  retrieves essentially the whole corpus, so `retrieval_status` often reads LOW even when the one
-  genuinely relevant chunk was found and correctly used (see the real evaluation report). Tune
-  `TOP_K` down for small corpora.
-- **The upload flow's OS file-picker interaction was verified by code review and equivalent curl
-  calls**, not literal browser automation of the picker (a tooling limitation during development,
-  not a known frontend defect).
+- Eval set is 24 questions; growing it just means more runtime
+- RAGAS pinned to `0.1.21` — newer versions break on a missing import
+- Local and web evidence aren't scored on the same scale
+- Upload size capped at 20MB after the fact, not streamed — fine for local use, not for public-facing
+- Run traces live in memory, last 500, gone on restart
+- Small corpora can make retrieval look weak even when it found the right chunk — tune `TOP_K` down

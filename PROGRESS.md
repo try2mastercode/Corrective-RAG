@@ -1,7 +1,8 @@
 # CRAG Project — Progress Tracker
 
 > Read this file first if resuming after a context reset. It records what's done,
-> what's decided, and what's next. The full spec lives in [todo.md](todo.md).
+> what's decided, and what's next. The full spec lived in `todo.md` (an internal planning
+> doc, not part of this repo).
 
 ## Locked-in decisions (Phase 0)
 
