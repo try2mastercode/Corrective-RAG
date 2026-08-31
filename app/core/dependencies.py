@@ -2,6 +2,7 @@ from app.core.config import Settings, get_settings
 from app.embeddings.base import EmbeddingProvider
 from app.embeddings.local import get_embedding_provider
 from app.llm.base import LLMClient
+from app.llm.groq import GroqClient
 from app.llm.ollama import OllamaClient
 from app.llm.openrouter import OpenRouterClient
 from app.retrieval.retriever import Retriever
@@ -28,4 +29,6 @@ def build_llm_client(settings: Settings | None = None) -> LLMClient:
     settings = settings or get_settings()
     if settings.llm_provider == "openrouter":
         return OpenRouterClient(settings.openrouter_api_key, settings.openrouter_model)
+    if settings.llm_provider == "groq":
+        return GroqClient(settings.groq_api_key, settings.groq_model)
     return OllamaClient(settings.llm_base_url, settings.llm_model)

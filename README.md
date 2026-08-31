@@ -21,8 +21,9 @@ claim verification/correction → RAGAS evaluation → vanilla JS frontend → o
 - **Backend:** Python 3.11 + FastAPI
 - **LLM:** local by default, via [Ollama](https://ollama.com) — `llama3.2:3b` (pipeline),
   `qwen2.5:7b-instruct` (RAGAS judge — see [Evaluation](#evaluation)). Optionally
-  [OpenRouter](https://openrouter.ai) (cloud) instead — see [Using OpenRouter instead of a local
-  model](#using-openrouter-instead-of-a-local-model)
+  [Groq](https://groq.com) or [OpenRouter](https://openrouter.ai) (cloud) instead — see
+  [Using a cloud LLM provider instead of a local
+  model](#using-a-cloud-llm-provider-instead-of-a-local-model)
 - **Embeddings:** local, in-process via `sentence-transformers` — `BAAI/bge-small-en-v1.5`
 - **Vector store:** Chroma
 - **Web search:** DuckDuckGo (via `ddgs`), no API key
@@ -101,20 +102,47 @@ python -m scripts.evaluate --limit 5              # small interactive evaluation
 python -m scripts.benchmark --limit 10            # fast CRAG-only latency/rate check, no RAGAS
 ```
 
-## Using OpenRouter instead of a local model
+## Using a cloud LLM provider instead of a local model
 
 By default this project runs entirely on-device (Ollama), which is the point of it being called
-"local-first" — nothing about your documents or questions leaves your machine. [OpenRouter](https://openrouter.ai)
-is a cloud API that gives access to many models (including free-tier ones) behind one key. It's
-useful if your hardware is too slow for comfortable local inference, but switching to it means
-your questions and document content **do** leave your machine and go to a third party — that's a
-real trade-off, not a free upgrade.
+"local-first" — nothing about your documents or questions leaves your machine. Two cloud
+providers are supported instead, both opt-in: [OpenRouter](https://openrouter.ai) and
+[Groq](https://groq.com). Switching to either means your questions and document content **do**
+leave your machine and go to a third party — that's a real trade-off, not a free upgrade.
+Embeddings (`sentence-transformers`) and the vector store (Chroma) always stay local regardless
+of which `LLM_PROVIDER` is selected.
 
-To switch:
+**Recommendation based on hands-on testing:** prefer Groq over OpenRouter for this project. Both
+are free with no credit card, but OpenRouter's free models draw from a pool shared with every
+other free user, which we hit real `429` rate limits against during testing (including one
+where the error was hidden inside an HTTP 200 response body, not even a normal 429 status).
+Groq's free tier is a per-account quota instead, giving far more practical daily headroom for
+this pipeline's many-calls-per-question pattern (roughly 10x more requests/day at last check),
+and Groq's custom inference hardware made a single question complete in ~3.5 seconds
+end-to-end in testing, versus 30-120s on local Ollama or 54s+ on OpenRouter (including
+rate-limit retries).
 
-1. **Get a free API key yourself** — go to [openrouter.ai/keys](https://openrouter.ai/keys),
-   sign up (no credit card required for the free tier), and create a key. I can't create the
-   account or generate the key for you; this step is yours to do.
+### Groq setup
+
+1. **Get a free API key yourself** at [console.groq.com/keys](https://console.groq.com/keys) —
+   no credit card required. I can't create the account or generate the key for you.
+2. Set these in `.env`:
+   ```env
+   LLM_PROVIDER=groq
+   GROQ_API_KEY=gsk_...your-key-here...
+   GROQ_MODEL=openai/gpt-oss-20b
+   ```
+3. Check [console.groq.com/docs/models](https://console.groq.com/docs/models) for the current
+   model list — exact IDs change over time, so confirm `GROQ_MODEL` above is still live. Avoid
+   "thinking" models (e.g. Qwen's reasoning variants) for this pipeline — they prepend visible
+   chain-of-thought text before the actual JSON output, which this pipeline's parsers don't
+   expect.
+4. Restart the backend.
+
+### OpenRouter setup
+
+1. **Get a free API key yourself** at [openrouter.ai/keys](https://openrouter.ai/keys) — no
+   credit card required.
 2. Set these in `.env`:
    ```env
    LLM_PROVIDER=openrouter
@@ -123,20 +151,10 @@ To switch:
    ```
 3. Check [openrouter.ai/models](https://openrouter.ai/models?max_price=0) for the current list
    of free models (marked `:free`) — free-tier model availability and exact IDs change over
-   time, so confirm the one in `OPENROUTER_MODEL` above is still live before relying on it. In
-   testing, popular free models (e.g. `meta-llama/llama-3.1-8b-instruct:free`) returned
-   `429 Too Many Requests` ("temporarily rate-limited upstream" — the shared free pool for that
-   specific model was saturated, not an account problem) while smaller/less-popular free models
-   worked immediately. If you hit a 429, try a different free model from the live list rather
-   than assuming your key is broken.
-4. Restart the backend. `LLM_PROVIDER` controls only the pipeline's answering/grading/
-   verification model — embeddings (`sentence-transformers`) and the vector store (Chroma)
-   always stay local regardless of this setting.
-
-Free-tier rate limits on aggregators are usually tight (this pipeline can make 5-15+ model calls
-per question — grading, rewriting, claim verification — so a single question can burn through a
-meaningful chunk of a daily free quota). If you hit rate limits, the fix is either a paid
-OpenRouter tier, a different free model, or switching back to `LLM_PROVIDER=ollama`.
+   time, and popular free models are prone to shared-pool rate limits (`429`, sometimes embedded
+   in an HTTP 200 body rather than a real 429 status — both are handled with automatic retry, but
+   persistent saturation on one model means switching to a different free model, not a broken key).
+4. Restart the backend.
 
 ## Architecture
 

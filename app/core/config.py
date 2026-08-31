@@ -7,13 +7,17 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # LLM
-    llm_provider: str = "ollama"  # "ollama" (local, default) or "openrouter" (cloud, opt-in)
+    llm_provider: str = "ollama"  # "ollama" (local, default), "openrouter", or "groq" (cloud, opt-in)
     llm_base_url: str = "http://localhost:11434"
     llm_model: str = "llama3.2:3b"
 
     # OpenRouter (only used when llm_provider="openrouter" -- see README for setup)
     openrouter_api_key: str = ""
     openrouter_model: str = "liquid/lfm-2.5-2.6b:free"
+
+    # Groq (only used when llm_provider="groq" -- see README for setup)
+    groq_api_key: str = ""
+    groq_model: str = "openai/gpt-oss-20b"
 
     # Embeddings
     embedding_provider: str = "local"
