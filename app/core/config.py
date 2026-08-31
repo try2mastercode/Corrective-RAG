@@ -21,8 +21,10 @@ class Settings(BaseSettings):
 
     # Web search fallback
     web_search_enabled: bool = False
-    web_search_provider: str = ""
+    web_search_provider: str = "duckduckgo"
     web_search_api_key: str = ""
+    web_search_max_results: int = 5
+    web_search_timeout: float = 10.0
 
     # Retrieval / correction tuning
     top_k: int = 8

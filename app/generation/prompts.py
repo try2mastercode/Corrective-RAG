@@ -17,7 +17,11 @@ Rules:
 
 
 def build_answer_prompt(question: str, evidence: list[dict]) -> str:
-    evidence_block = "\n".join(f"[{i + 1}] {e['text']}" for i, e in enumerate(evidence))
+    lines = []
+    for i, e in enumerate(evidence):
+        label = "web source" if e.get("source_type") == "WEB_SOURCE" else "local document"
+        lines.append(f"[{i + 1}] ({label}: {e['source']}) {e['text']}")
+    evidence_block = "\n".join(lines)
     return (
         f"Evidence:\n{evidence_block}\n\n"
         f"User question:\n{question}\n\n"

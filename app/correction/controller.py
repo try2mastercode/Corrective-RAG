@@ -1,11 +1,12 @@
 import logging
 
 from app.core.config import Settings
-from app.core.models import CorrectiveRetrievalResult, GradedChunk, RetrievalRound
+from app.core.models import CorrectiveRetrievalResult, GradedChunk, RetrievedChunk, RetrievalRound
 from app.correction.query_rewriter import rewrite_query
 from app.llm.base import LLMClient
 from app.retrieval.grader import calculate_retrieval_quality, grade_chunks
 from app.retrieval.retriever import Retriever
+from app.web.search import compute_web_chunk_id, web_search
 
 
 logger = logging.getLogger(__name__)
@@ -78,4 +79,67 @@ def run_corrective_retrieval(
         rounds=rounds,
         rewrites=rewrites,
         final_quality=final_quality,
+    )
+
+
+def _web_result_to_chunk(result) -> RetrievedChunk:
+    text = f"{result.title}\n{result.snippet}".strip()
+    return RetrievedChunk(
+        chunk_id=compute_web_chunk_id(result.url),
+        text=text,
+        # Not a vector-similarity score (web results aren't embedded/ranked that way) --
+        # a neutral placeholder; grading below is what actually decides relevance.
+        score=0.5,
+        source=result.url,
+        metadata={"title": result.title, "retrieved_at": result.retrieved_at},
+        source_type="WEB_SOURCE",
+    )
+
+
+def apply_web_fallback(
+    question: str,
+    correction: CorrectiveRetrievalResult,
+    llm: LLMClient,
+    settings: Settings,
+) -> CorrectiveRetrievalResult:
+    """If local retrieval is still not HIGH after corrective retrieval and web fallback is
+    enabled, search the web, grade the results against the original question, and append any
+    non-IRRELEVANT results to the evidence set. Local evidence always comes first -- web search
+    is a supplement for when local retrieval fell short, not a replacement for it. Never raises:
+    a search failure just means no web evidence gets added."""
+    if not settings.web_search_enabled or correction.final_quality.decision == "HIGH":
+        return correction
+
+    web_results = web_search(
+        question,
+        provider=settings.web_search_provider,
+        max_results=settings.web_search_max_results,
+        timeout=settings.web_search_timeout,
+    )
+
+    if not web_results:
+        return correction.model_copy(update={"web_search_triggered": True})
+
+    web_chunks = [_web_result_to_chunk(r) for r in web_results]
+    graded_web = grade_chunks(question, web_chunks, llm, max_retries=settings.grader_max_retries)
+    relevant_web = sorted(
+        (gc for gc in graded_web if gc.grade.label != "IRRELEVANT"),
+        key=lambda gc: gc.grade.score,
+        reverse=True,
+    )
+    relevant_web_chunks = [gc.chunk for gc in relevant_web]
+
+    logger.info(
+        "web fallback: %d results fetched, %d graded relevant",
+        len(web_results),
+        len(relevant_web_chunks),
+    )
+
+    return correction.model_copy(
+        update={
+            "final_chunks": correction.final_chunks + relevant_web_chunks,
+            "web_search_triggered": True,
+            "web_used": bool(relevant_web_chunks),
+            "web_results": web_results,
+        }
     )

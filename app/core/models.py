@@ -24,6 +24,7 @@ class RetrievedChunk(BaseModel):
     score: float
     source: str
     metadata: dict
+    source_type: str = "LOCAL_DOCUMENT"  # LOCAL_DOCUMENT | WEB_SOURCE
 
 
 class RetrieveResponse(BaseModel):
@@ -62,11 +63,21 @@ class RetrievalRound(BaseModel):
     quality: RetrievalQualityResult
 
 
+class WebSearchResult(BaseModel):
+    url: str
+    title: str
+    snippet: str
+    retrieved_at: str
+
+
 class CorrectiveRetrievalResult(BaseModel):
     final_chunks: list[RetrievedChunk]
     rounds: list[RetrievalRound]
     rewrites: list[QueryRewrite]
     final_quality: RetrievalQualityResult
+    web_search_triggered: bool = False
+    web_used: bool = False
+    web_results: list[WebSearchResult] = Field(default_factory=list)
 
 
 class AskRequest(BaseModel):
@@ -78,6 +89,7 @@ class AskRequest(BaseModel):
 class SourceCitation(BaseModel):
     id: str
     source: str
+    source_type: str = "LOCAL_DOCUMENT"
     page: int | None = None
 
 

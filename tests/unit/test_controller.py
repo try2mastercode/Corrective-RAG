@@ -1,8 +1,8 @@
 import json
 
 from app.core.config import Settings
-from app.core.models import RetrievedChunk
-from app.correction.controller import run_corrective_retrieval
+from app.core.models import CorrectiveRetrievalResult, RetrievalQualityResult, RetrievedChunk, WebSearchResult
+from app.correction.controller import apply_web_fallback, run_corrective_retrieval
 from app.correction.query_rewriter import QUERY_REWRITER_SYSTEM_PROMPT_V1
 from app.llm.base import LLMClient
 from app.retrieval.grader import RETRIEVAL_GRADER_SYSTEM_PROMPT_V1
@@ -152,3 +152,126 @@ def test_max_rounds_of_one_skips_correction_entirely():
     assert len(result.rounds) == 1
     assert result.rewrites == []
     assert llm.rewrite_calls == 0
+
+
+def _weak_correction(chunks=None) -> CorrectiveRetrievalResult:
+    return CorrectiveRetrievalResult(
+        final_chunks=chunks or [],
+        rounds=[],
+        rewrites=[],
+        final_quality=RetrievalQualityResult(
+            mean_score=0.1, best_score=0.1, relevant_ratio=0.0, quality_score=0.1, decision="LOW"
+        ),
+    )
+
+
+def _high_correction() -> CorrectiveRetrievalResult:
+    return CorrectiveRetrievalResult(
+        final_chunks=[_chunk("local1", "great local match", score=0.9)],
+        rounds=[],
+        rewrites=[],
+        final_quality=RetrievalQualityResult(
+            mean_score=0.9, best_score=0.9, relevant_ratio=1.0, quality_score=0.9, decision="HIGH"
+        ),
+    )
+
+
+class GradingOnlyLLM(LLMClient):
+    def __init__(self, grades: dict[str, dict]):
+        self._grades = grades
+        self.calls = 0
+
+    def generate(self, prompt: str, system: str | None = None, temperature: float = 0.0) -> str:
+        assert system == RETRIEVAL_GRADER_SYSTEM_PROMPT_V1
+        self.calls += 1
+        passage = prompt.split("Retrieved passage:\n", 1)[1].rsplit("\n\nReturn JSON only.", 1)[0]
+        return json.dumps(self._grades[passage])
+
+
+def test_web_fallback_skipped_when_disabled(monkeypatch):
+    def _fail_if_called(*args, **kwargs):
+        raise AssertionError("web_search should not be called when disabled")
+
+    monkeypatch.setattr("app.correction.controller.web_search", _fail_if_called)
+
+    correction = _weak_correction()
+    result = apply_web_fallback("q", correction, GradingOnlyLLM({}), _settings(web_search_enabled=False))
+
+    assert result is correction
+    assert result.web_search_triggered is False
+
+
+def test_web_fallback_skipped_when_local_quality_is_high(monkeypatch):
+    def _fail_if_called(*args, **kwargs):
+        raise AssertionError("web_search should not be called when local quality is already HIGH")
+
+    monkeypatch.setattr("app.correction.controller.web_search", _fail_if_called)
+
+    correction = _high_correction()
+    result = apply_web_fallback("q", correction, GradingOnlyLLM({}), _settings(web_search_enabled=True))
+
+    assert result is correction
+
+
+def test_web_fallback_merges_relevant_results(monkeypatch):
+    web_results = [
+        WebSearchResult(url="https://a.example.com", title="A", snippet="a relevant snippet", retrieved_at="t"),
+        WebSearchResult(url="https://b.example.com", title="B", snippet="an irrelevant snippet", retrieved_at="t"),
+    ]
+    monkeypatch.setattr("app.correction.controller.web_search", lambda *a, **kw: web_results)
+
+    llm = GradingOnlyLLM(
+        {
+            "A\na relevant snippet": {"score": 0.9, "label": "RELEVANT", "reason": "matches"},
+            "B\nan irrelevant snippet": {"score": 0.1, "label": "IRRELEVANT", "reason": "no match"},
+        }
+    )
+
+    correction = _weak_correction()
+    result = apply_web_fallback("q", correction, llm, _settings(web_search_enabled=True))
+
+    assert result.web_search_triggered is True
+    assert result.web_used is True
+    assert len(result.final_chunks) == 1
+    assert result.final_chunks[0].source == "https://a.example.com"
+    assert result.final_chunks[0].source_type == "WEB_SOURCE"
+    assert len(result.web_results) == 2  # raw results preserved for debug transparency
+
+
+def test_web_fallback_no_results_found(monkeypatch):
+    monkeypatch.setattr("app.correction.controller.web_search", lambda *a, **kw: [])
+
+    correction = _weak_correction()
+    result = apply_web_fallback("q", correction, GradingOnlyLLM({}), _settings(web_search_enabled=True))
+
+    assert result.web_search_triggered is True
+    assert result.web_used is False
+    assert result.final_chunks == []
+
+
+def test_web_fallback_all_results_irrelevant_does_not_pollute_evidence(monkeypatch):
+    web_results = [
+        WebSearchResult(url="https://a.example.com", title="A", snippet="off topic", retrieved_at="t"),
+    ]
+    monkeypatch.setattr("app.correction.controller.web_search", lambda *a, **kw: web_results)
+    llm = GradingOnlyLLM({"A\noff topic": {"score": 0.05, "label": "IRRELEVANT", "reason": "unrelated"}})
+
+    correction = _weak_correction()
+    result = apply_web_fallback("q", correction, llm, _settings(web_search_enabled=True))
+
+    assert result.web_used is False
+    assert result.final_chunks == []
+
+
+def test_web_fallback_appends_after_existing_local_chunks(monkeypatch):
+    local_chunk = _chunk("local1", "somewhat useful local passage", score=0.5)
+    web_results = [WebSearchResult(url="https://a.example.com", title="A", snippet="good web info", retrieved_at="t")]
+    monkeypatch.setattr("app.correction.controller.web_search", lambda *a, **kw: web_results)
+    llm = GradingOnlyLLM({"A\ngood web info": {"score": 0.9, "label": "RELEVANT", "reason": "matches"}})
+
+    correction = _weak_correction(chunks=[local_chunk])
+    result = apply_web_fallback("q", correction, llm, _settings(web_search_enabled=True))
+
+    assert [c.chunk_id for c in result.final_chunks] == ["local1", result.final_chunks[1].chunk_id]
+    assert result.final_chunks[0].source_type == "LOCAL_DOCUMENT"
+    assert result.final_chunks[1].source_type == "WEB_SOURCE"

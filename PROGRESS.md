@@ -11,7 +11,7 @@
 | Python | 3.11.9 (via `py -3.11`) | Chosen over default 3.14.3 for ML dependency (torch/chromadb/sentence-transformers/ragas) compatibility. |
 | Embeddings | `sentence-transformers`, in-process | Model: `BAAI/bge-small-en-v1.5`. No extra server. |
 | Vector store | Chroma | Per spec default. |
-| Web search (Phase 4) | **Not yet decided** — deferred until Phase 4 | Options on the table: DuckDuckGo (no key) or Tavily/SerpAPI/Brave (user has key, TBD which). Ask again when Phase 4 starts. |
+| Web search | DuckDuckGo via the `ddgs` package, no API key | Decided 2026-08-31 when Phase 4 started. Free, no signup. See Phase 4 detail below for adapter design. |
 | Backend | FastAPI | Per spec. |
 | Frontend | HTML/CSS/vanilla JS only | Per spec, no frameworks. |
 | Git identity | Uses existing global git config (Tharun Sridhar) | No AI attribution ever — see todo.md rules. |
@@ -27,10 +27,11 @@
 7. Don't claim a feature is done without implementing AND validating it.
 
 **Note on permission checkpoints:** originally every phase paused for explicit user go-ahead
-before committing. On 2026-08-30 the user said not to ask every time and to just proceed through
-Phase 1, then stop. Phase 1 was therefore implemented and committed without an interim approval
-ask. **When resuming for Phase 2, go back to asking for permission before each phase's commit**
-unless the user says otherwise again.
+before committing. That held through Phases 2-3. On 2026-08-31 the user said to go through all
+remaining phases (4 onward) without needing them for each one. From Phase 4 onward: implement,
+test, commit, and move to the next phase autonomously — only stop for a genuine blocker (a
+decision only the user can make, like an API key or an ambiguous spec choice affecting
+direction), not for routine "may I commit?" checkpoints.
 
 ## Phase status
 
@@ -38,8 +39,8 @@ unless the user says otherwise again.
 - [x] **Phase 1** — Basic Local RAG — DONE (commits `044a77f`, `d632782`)
 - [x] **Phase 2** — Retrieval Grading — DONE (commit `f5e748a`)
 - [x] **Phase 3** — Corrective Query Rewriting and Re-Retrieval — DONE (commit `b7380b9`)
-- [ ] **Phase 4** — Web Search Fallback — NEXT (stopped here per user request; need provider decision — see above)
-- [ ] Phase 5 — Evidence Builder and Grounded Generation
+- [x] **Phase 4** — Web Search Fallback — DONE, committing now (autonomous mode, see note above)
+- [ ] **Phase 5** — Evidence Builder and Grounded Generation — IN PROGRESS
 - [ ] Phase 6 — Hallucination / Claim Verification
 - [ ] Phase 7 — RAGAS Evaluation and Benchmarking
 - [ ] Phase 8 — Vanilla HTML/CSS/JS Frontend
@@ -54,6 +55,7 @@ unless the user says otherwise again.
 | 1 (fixup) | `d632782` | chore: record phase 1 commit hash in progress tracker |
 | 2 | `f5e748a` | feat: add retrieval grading |
 | 3 | `b7380b9` | feat: add corrective query rewriting |
+| 4 | _pending_ | feat: add web search fallback |
 
 ## Completed phase detail — Phase 0
 
@@ -204,31 +206,92 @@ Known limitations / deliberate scope boundaries:
   `/ask` responses are still just the final merged-and-sorted order.
 - No claim verification / hallucination check yet (Phase 6).
 
-## Current phase detail — Phase 4 (Web Search Fallback) — not started
+## Completed phase detail — Phase 4 (Web Search Fallback)
 
-Scope (from todo.md section 38 / section 13):
-- [ ] **Ask the user which web search provider to use** — this was explicitly deferred from
-  Phase 0 (see "Locked-in decisions" table above: options were DuckDuckGo/no-key, or
-  Tavily/SerpAPI/Brave if the user has a key). Do this before writing the adapter.
-- [ ] Web search adapter (`app/web/search.py`), provider configurable via `WEB_SEARCH_PROVIDER`
-- [ ] Result normalization: URL, title, snippet/content, retrieval timestamp
-- [ ] Source deduplication
-- [ ] Provider timeout + failure handling (must not crash `/ask`; degrade gracefully)
-- [ ] `WEB_SEARCH_ENABLED` feature flag (already in config/`.env.example`, unused so far)
-- [ ] Trigger condition: local retrieval still weak after `run_corrective_retrieval` is exhausted
-  AND `web_search_enabled` AND (`request.web_fallback` — already an `AskRequest` field, unused
-  so far)
-- [ ] Clear `LOCAL_DOCUMENT` vs `WEB_SOURCE` labeling — must never blur the two
-- [ ] Tests: fallback triggers only when appropriate, timeout handling, provider failure handling
+All checklist items done. Verified via `pytest` (55 passed — 18 new: 7 web-search adapter unit
+tests using a fake DDGS double, no real network calls in the test suite; 6 new
+`apply_web_fallback` controller tests) and a live end-to-end smoke test against real DuckDuckGo
++ Ollama/`llama3.2:3b`: indexed an unrelated local document (canal towpath resurfacing), asked
+"What year did the first iPhone get released?" with `web_fallback: true` — local retrieval
+correctly graded LOW on both rounds (rewrite attempted, still LOW — the answer genuinely isn't
+local), web fallback triggered, fetched 5 real Wikipedia/tech-site results, graded them, and the
+final answer correctly said "2007" citing `[2]`/`[3]` as sources, all five sources labeled
+`source_type: "WEB_SOURCE"`, and `retrieval_status: "WEB_FALLBACK"`.
 
-Acceptance criteria: the system uses web search only when configured and local retrieval remains
-weak after corrective retrieval; web evidence is clearly distinguished from local documents.
+Key artifacts added:
+- `app/web/search.py` — `web_search(query, provider, max_results, timeout)`, currently
+  implementing `"duckduckgo"` via the `ddgs` package (successor to the now-legacy
+  `duckduckgo-search` package; no API key/signup needed). Catches `DDGSException` and any other
+  unexpected exception, always degrading to `[]` rather than raising — a search failure must
+  never crash `/ask`. Deduplicates by URL. Unknown/unconfigured provider also degrades to `[]`
+  with a warning log (so `WEB_SEARCH_PROVIDER` can be extended later without touching call sites)
+- `app/correction/controller.py` — `apply_web_fallback(question, correction, llm, settings)`:
+  triggers only when `settings.web_search_enabled` AND the local `final_quality.decision` is not
+  already `HIGH` (both gates independent of the per-request `AskRequest.web_fallback` flag, which
+  is the *third* gate checked at the route level — all three must be true). Web results are
+  converted to `RetrievedChunk` (`source_type="WEB_SOURCE"`, a neutral placeholder `score=0.5`
+  since vector-similarity scoring doesn't apply to web search hits), graded with the *same*
+  `grade_chunks` used for local evidence (against the original question, consistent with the
+  Phase 3 pattern), and only non-`IRRELEVANT` results are appended **after** existing local
+  chunks — local evidence is never displaced by web evidence, only supplemented
+- `app/core/models.py` — `WebSearchResult`; `RetrievedChunk` gained `source_type` (default
+  `"LOCAL_DOCUMENT"`); `SourceCitation` gained `source_type`; `CorrectiveRetrievalResult` gained
+  `web_search_triggered` / `web_used` / `web_results` for full debug transparency (triggered vs.
+  actually-used are tracked separately, so a fetch-succeeded-but-all-irrelevant case is
+  distinguishable from a fetch-failed case)
+- `app/generation/prompts.py` / `answer.py` — the evidence block shown to the LLM now labels
+  each passage `(local document: ...)` or `(web source: ...)` inline, satisfying todo.md section
+  13's "must never silently imply a web result came from local database" at the prompt level, not
+  just in the API response
+- `app/api/routes_ask.py` — `/ask` calls `apply_web_fallback` only when `request.web_fallback` is
+  true; `retrieval_status` becomes `"WEB_FALLBACK"` when web evidence was actually incorporated,
+  otherwise unchanged from Phase 2/3's HIGH/MEDIUM/LOW/NO_RESULTS
+- `tests/unit/test_web_search.py`, plus additions to `tests/unit/test_controller.py`
+
+**Design decision worth remembering:** `CorrectiveRetrievalResult.final_quality` deliberately
+stays a **local-only** metric even after web fallback runs (it is not recomputed/blended with web
+results) — the live smoke test above shows `final_quality.decision: "LOW"` even though the
+answer was fully and correctly grounded in good web evidence. The user-facing `retrieval_status`
+field is what reflects reality (it becomes `"WEB_FALLBACK"`), computed at the route level. This
+was a deliberate choice, not an oversight: building a unified cross-source quality/ranking model
+(blending vector-similarity scores with web search rank) is explicitly Phase 5's job per todo.md
+section 14 ("Evidence Builder... Rank evidence by relevance"), so Phase 4 intentionally leaves
+that unsolved rather than reaching ahead into Phase 5's scope.
+
+Known limitations / deliberate scope boundaries:
+- No formal Evidence Builder yet — evidence IDs shown to the user are just the final list order
+  (`[1]`, `[2]`, ...), not stable IDs assigned once and carried through generation +
+  verification. That stability guarantee is explicitly Phase 5's job (todo.md section 14: "Keep
+  evidence IDs stable through answer generation").
+- No claim verification / hallucination check yet (Phase 6) — nothing double-checks that the
+  answer's claims are actually supported by the (now possibly web-sourced) evidence beyond the
+  existing grading-based filtering.
+- Web search adds real latency (network + up to `WEB_SEARCH_MAX_RESULTS` grading calls) only when
+  triggered (disabled by default, and gated by both the global flag and the per-request opt-in),
+  so it doesn't affect the default `/ask` path at all.
+
+## Current phase detail — Phase 5 (Evidence Builder and Grounded Generation) — in progress
+
+Scope (from todo.md section 38 / section 14-15):
+- [ ] Stable evidence IDs (`E1`, `E2`, ...) assigned once per `/ask` call and carried unchanged
+  from evidence-building through generation (today, citation numbers are just list position)
+- [ ] Evidence deduplication (near-duplicate passages, not just exact chunk_id/URL matches)
+- [ ] Evidence ranking (a real cross-source ranking — this is where the "final_quality is
+  local-only" limitation from Phase 4 gets addressed, if in scope; otherwise document why not)
+- [ ] Context-size control (cap total evidence text sent to the LLM)
+- [ ] Evidence-aware answer prompt update if the evidence object shape changes
+- [ ] Insufficient-evidence response behavior (formalize what's currently just "empty chunks ->
+  generic fallback string" in `generate_answer`)
+- [ ] Debug evidence display (expose the built evidence layer, not just raw chunks, in `/ask`
+  debug output)
+
+Acceptance criteria: answers cite the evidence used and do not silently mix unsupported
+information into the final response.
 
 ### Next action when resuming
-1. Re-read this file top to bottom, then skim `todo.md` section 13 for the web fallback spec.
-2. **Ask the user for the web search provider decision first** (see checklist above) — this
-   blocks implementation, unlike prior phases where the decision was already made.
-3. Ask for permission before starting implementation (standing workflow rule).
-4. Implement the checklist above, run tests, review `git diff`, ask for permission before
-   committing, commit as `feat: add web search fallback`, update this file's Phase status table
-   and commit log, then move to Phase 5.
+1. Re-read this file top to bottom, then skim `todo.md` section 14-15.
+2. Per the current autonomous-mode instruction, implement without pausing for permission unless
+   something is genuinely ambiguous or needs a decision only the user can make.
+3. Implement the checklist above, run tests, do a live smoke test, review `git diff`, commit as
+   `feat: add grounded evidence generation`, update this file's Phase status table and commit
+   log, then move to Phase 6.
