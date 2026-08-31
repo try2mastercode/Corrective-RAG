@@ -39,7 +39,7 @@ direction), not for routine "may I commit?" checkpoints.
 - [x] **Phase 1** — Basic Local RAG — DONE (commits `044a77f`, `d632782`)
 - [x] **Phase 2** — Retrieval Grading — DONE (commit `f5e748a`)
 - [x] **Phase 3** — Corrective Query Rewriting and Re-Retrieval — DONE (commit `b7380b9`)
-- [x] **Phase 4** — Web Search Fallback — DONE, committing now (autonomous mode, see note above)
+- [x] **Phase 4** — Web Search Fallback — DONE (commit `0fe03ca`)
 - [ ] **Phase 5** — Evidence Builder and Grounded Generation — IN PROGRESS
 - [ ] Phase 6 — Hallucination / Claim Verification
 - [ ] Phase 7 — RAGAS Evaluation and Benchmarking
@@ -55,7 +55,7 @@ direction), not for routine "may I commit?" checkpoints.
 | 1 (fixup) | `d632782` | chore: record phase 1 commit hash in progress tracker |
 | 2 | `f5e748a` | feat: add retrieval grading |
 | 3 | `b7380b9` | feat: add corrective query rewriting |
-| 4 | _pending_ | feat: add web search fallback |
+| 4 | `0fe03ca` | feat: add web search fallback |
 
 ## Completed phase detail — Phase 0
 
