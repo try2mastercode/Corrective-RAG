@@ -41,8 +41,8 @@ direction), not for routine "may I commit?" checkpoints.
 - [x] **Phase 3** — Corrective Query Rewriting and Re-Retrieval — DONE (commit `b7380b9`)
 - [x] **Phase 4** — Web Search Fallback — DONE (commit `0fe03ca`)
 - [x] **Phase 5** — Evidence Builder and Grounded Generation — DONE (commit `3813458`)
-- [ ] **Phase 6** — Hallucination / Claim Verification — IN PROGRESS
-- [ ] Phase 7 — RAGAS Evaluation and Benchmarking
+- [x] **Phase 6** — Hallucination / Claim Verification — DONE, committing now
+- [ ] **Phase 7** — RAGAS Evaluation and Benchmarking — IN PROGRESS
 - [ ] Phase 8 — Vanilla HTML/CSS/JS Frontend
 - [ ] Phase 9 — Observability, Security, Testing, Hardening
 
@@ -57,6 +57,7 @@ direction), not for routine "may I commit?" checkpoints.
 | 3 | `b7380b9` | feat: add corrective query rewriting |
 | 4 | `0fe03ca` | feat: add web search fallback |
 | 5 | `3813458` | feat: add grounded evidence generation |
+| 6 | _pending_ | feat: add hallucination verification |
 
 ## Completed phase detail — Phase 0
 
@@ -319,35 +320,111 @@ Known limitations / deliberate scope boundaries:
   NO_RESULTS) plus `generate_answer`'s empty-evidence fallback string cover the same practical
   ground today; the formal decision layer fits naturally alongside Phase 6's grounding score.
 
-## Current phase detail — Phase 6 (Hallucination / Claim Verification) — in progress
+## Completed phase detail — Phase 6 (Hallucination / Claim Verification)
 
-Scope (from todo.md section 38 / section 16-17):
-- [ ] Claim extraction (`app/verification/claims.py`) — LLM call that splits a generated answer
-  into discrete factual claims
-- [ ] Claim-to-evidence matching / support grading (`app/verification/verifier.py`) — for each
-  claim, does the evidence actually support it? Structured output per todo.md section 16:
-  `{claim, supported, evidence_ids, confidence}`
-- [ ] Answer grounding score (aggregate over all claims) compared against
-  `ANSWER_GROUNDING_THRESHOLD` (already in config, unused so far)
-- [ ] Unsupported-claim detection feeding into...
-- [ ] Answer correction loop (`app/verification/correction.py`) — regenerate/qualify/remove
-  unsupported claims, bounded by `MAX_ANSWER_CORRECTIONS` (already in config, unused so far)
-- [ ] Final verification pass after correction
-- [ ] Insufficient-evidence fallback if grounding remains poor after max correction attempts
-- [ ] Adversarial hallucination tests (deliberately trigger an unsupported claim and confirm it
-  gets caught)
-- [ ] Wire into `/ask`: generate -> verify -> correct if needed -> verify again -> final answer
-- [ ] Expose verification results in `/ask` debug output; add a `grounding_status` field to
-  `AskResponse` per todo.md section 24's example response shape (`"grounding_status": "SUPPORTED"`)
+All checklist items done. Verified via `pytest` (83 passed — 18 new: 6 claim-extraction, 9
+verifier/orchestration including one scripted adversarial test, 3 correction-prompt tests) and
+two live smoke tests against real Ollama/`llama3.2:3b`:
+1. **Happy path**: asked a fully-answerable question — both extracted claims verified as
+   `supported: true, confidence: 1.0`, `grounding_status: "SUPPORTED"`, zero correction attempts.
+2. **Real hallucination test** (the important one): manually constructed a draft answer with one
+   true claim ("completed in 1988") and one fabricated claim ("funded entirely by a private
+   donation from the Halvorsen Foundation" — nothing like this was ever in the evidence) and ran
+   it through `verify_and_correct_answer` directly against the live model. The real model
+   correctly flagged the fabricated claim as unsupported, triggered a correction, and the
+   corrected answer **dropped the hallucination entirely** while keeping the genuine facts,
+   re-verifying as fully `SUPPORTED` on the second pass. This is the core CRAG claim ("a RAG
+   system can evaluate and correct its own retrieval **and generation**") actually demonstrated
+   end-to-end with the real local model, not just asserted in a mocked unit test.
 
-Acceptance criteria: when a generated answer contains an unsupported factual claim, the system
-detects it and either removes/qualifies it or returns an insufficient-evidence response.
+Key artifacts added:
+- `app/llm/json_utils.py` — `extract_json()`, a shared helper extracted **now** (not
+  retroactively applied to Phase 2/3's `grader.py`/`query_rewriter.py`, which keep their own
+  copies to avoid touching already-shipped, tested code) since this phase pushed the number of
+  near-identical JSON-extraction call sites from 2 to 4-5, past the point where duplication was
+  still the simpler choice
+- `app/verification/claims.py` — `extract_claims`: LLM call producing `{"claims": [...]}`,
+  retries on malformed output, and (notably) falls back to treating **the whole answer as one
+  claim** if extraction totally fails — chosen deliberately so a parsing failure can't silently
+  skip verification altogether and let an unverified answer straight through
+- `app/verification/verifier.py` — `verify_claim`/`verify_claims`: same JSON-retry pattern,
+  falls back to `supported=False` (not "assume fine") when parsing fails, since silently trusting
+  an unparseable verification result would defeat the point of verifying at all;
+  `calculate_grounding_score`: mean of `confidence` for supported claims, `0.0` contribution for
+  unsupported ones, and **`1.0` for an empty claims list** (a refusal/insufficient-evidence
+  answer has nothing to hallucinate, so it shouldn't be penalized as "unsupported");
+  `verify_and_correct_answer`: the extract→verify→correct→re-verify loop, bounded by
+  `MAX_ANSWER_CORRECTIONS`
+- `app/verification/correction.py` — `correct_answer`: plain-text (not JSON) corrector prompt
+  per todo.md section 17's literal example, falls back to the original draft if the LLM ever
+  returns an empty correction (never let an answer become blank)
+- `app/core/models.py` — `ClaimVerification`, `VerificationResult`, `VerificationOutcome`;
+  `AskResponse` gained `grounding_status`
+- `app/api/routes_ask.py` — `/ask` now runs verification after generation (skipped entirely, as
+  a latency optimization, when there's no evidence at all — a canned "insufficient evidence"
+  string has no claims to check); `grounding_status` surfaces in the response per todo.md section
+  24's example shape; debug payload gains `draft_answer`, `verification`, `answer_corrected`,
+  `correction_attempts`, `gave_up_on_correction`
+- `tests/unit/test_claims.py`, `test_verifier.py` (includes
+  `test_adversarial_hallucinated_claim_gets_caught_and_corrected`), `test_correction.py`
+
+**Fallback-when-verification-gives-up behavior worth remembering:** when grounding stays below
+threshold even after `MAX_ANSWER_CORRECTIONS` attempts, the final answer is NOT silently returned
+as-is (that would defeat the purpose) NOR replaced with a generic refusal (that would throw away
+whatever *did* verify correctly) — it's prefixed with an explicit uncertainty notice
+(`UNSUPPORTED_FALLBACK_PREFIX` in `verifier.py`) while keeping the original text visible. This is
+a deliberate middle ground between todo.md's "fall back to an uncertainty response" (section 17)
+and not wanting to discard partially-correct information.
+
+Known limitations / deliberate scope boundaries:
+- No RAGAS evaluation yet (Phase 7) — nothing quantifies faithfulness/grounding across a real
+  dataset; today's validation is smoke-test-level (a handful of manually verified cases), not
+  a benchmark.
+- No formal `ANSWERABLE` / `ANSWERABLE_WITH_CAVEAT` / `INSUFFICIENT_EVIDENCE` decision enum
+  (todo.md section 18) still — `retrieval_status` + `grounding_status` together cover the same
+  practical signal today (e.g. HIGH retrieval + SUPPORTED grounding ≈ ANSWERABLE), but there's no
+  single combined field yet. Revisit if the frontend (Phase 8) or evaluation report (Phase 7)
+  needs one.
+- Verification adds real latency (claim extraction + N claim verifications, possibly doubled if
+  a correction round runs) on every non-empty `/ask` call — no caching or skip-if-obviously-fine
+  shortcut was added, consistent with todo.md section 34 deferring "unnecessary LLM calls"
+  optimization to Phase 9.
+
+## Current phase detail — Phase 7 (RAGAS Evaluation and Benchmarking) — in progress
+
+Scope (from todo.md section 38 / section 19-22):
+- [ ] Evaluation dataset (`data/evaluation/`) — 50+ questions (100+ preferred) spanning: easy,
+  multi-hop, ambiguous, hard-retrieval, unanswerable, distractor, fresh-information categories
+  (todo.md section 20). Given local-model/CPU constraints, aim for a meaningful but runnable
+  size — document the actual count and why, rather than padding to hit 100 artificially.
+- [ ] `app/evaluation/dataset.py` — load/validate the evaluation dataset format
+- [ ] `app/evaluation/ragas_runner.py` — RAGAS integration, isolated behind an evaluator module
+  per todo.md section 19's explicit warning not to assume RAGAS's API is stable
+- [ ] Baseline RAG runner (question -> retrieve -> generate, no grading/correction/verification)
+  vs. the full CRAG pipeline already built — both need to produce comparable outputs for RAGAS
+- [ ] Metrics: Context Precision, Context Recall, Faithfulness, Answer Relevancy (todo.md
+  section 19); note RAGAS needs an LLM judge too — decide whether that's the same local
+  `llama3.2:3b` or a separate judge model, and document the choice/limitation
+- [ ] `app/evaluation/reports.py` — comparison report: dataset size, baseline vs CRAG metrics,
+  improvement %, latency percentiles, rewrite rate, web fallback rate, correction rate,
+  insufficient-evidence rate, failure examples (todo.md section 22)
+- [ ] `scripts/evaluate.py`, `scripts/benchmark.py` CLI entry points
+- [ ] `POST /evaluate` API endpoint
+- [ ] Tests for the evaluation module itself (dataset loading/validation at least; RAGAS's own
+  metric computation is third-party and not something to unit-test)
+
+Acceptance criteria: the project produces a reproducible evaluation report showing whether CRAG
+improves retrieval/answer quality and what latency/correction costs it introduces.
 
 ### Next action when resuming
-1. Re-read this file top to bottom, then skim `todo.md` sections 16-17.
-2. Continue autonomously per the standing instruction (implement, test, commit, move on) unless
-   something is genuinely ambiguous.
-3. Implement the checklist above, run tests (including at least one adversarial test that
-   fabricates an unsupported claim and confirms it's caught), do a live smoke test, review
-   `git diff`, commit as `feat: add hallucination verification`, update this file's Phase status
-   table and commit log, then move to Phase 7.
+1. Re-read this file top to bottom, then skim `todo.md` sections 19-22.
+2. This phase has more open design questions than 1-6 (dataset size trade-off, judge-model
+   choice, RAGAS version/API risk) — work through them and document the decisions made rather
+   than treating them as blockers, per the standing autonomous-mode instruction. Only actually
+   stop and ask if something requires the user specifically (e.g. RAGAS proves fundamentally
+   incompatible with the local setup and a paid API judge seems like the only path forward --
+   that would need explicit sign-off since it touches the "no paid hosted LLM for the core
+   pipeline" rule, even if scoped only to evaluation).
+3. Implement, test, do a real evaluation run end-to-end (even a small one) to prove the report
+   is genuinely reproducible, review `git diff`, commit as `feat: add ragas evaluation`, update
+   this file's Phase status table and commit log, then move to Phase 8.

@@ -89,6 +89,27 @@ class CorrectiveRetrievalResult(BaseModel):
     web_results: list[WebSearchResult] = Field(default_factory=list)
 
 
+class ClaimVerification(BaseModel):
+    claim: str
+    supported: bool
+    evidence_ids: list[str]
+    confidence: float
+
+
+class VerificationResult(BaseModel):
+    claims: list[ClaimVerification]
+    grounding_score: float
+    status: str  # SUPPORTED | UNSUPPORTED
+
+
+class VerificationOutcome(BaseModel):
+    final_answer: str
+    verification: VerificationResult
+    corrected: bool
+    correction_attempts: int
+    gave_up: bool = False
+
+
 class AskRequest(BaseModel):
     question: str
     web_fallback: bool = False
@@ -106,6 +127,7 @@ class AskResponse(BaseModel):
     answer: str
     sources: list[SourceCitation]
     retrieval_status: str
+    grounding_status: str
     debug: dict | None = None
 
 
