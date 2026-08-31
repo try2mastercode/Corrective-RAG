@@ -19,8 +19,10 @@ claim verification/correction → RAGAS evaluation → vanilla JS frontend → o
 ## Stack
 
 - **Backend:** Python 3.11 + FastAPI
-- **LLM:** local, via [Ollama](https://ollama.com) — `llama3.2:3b` (pipeline), `qwen2.5:7b-instruct`
-  (RAGAS judge — see [Evaluation](#evaluation))
+- **LLM:** local by default, via [Ollama](https://ollama.com) — `llama3.2:3b` (pipeline),
+  `qwen2.5:7b-instruct` (RAGAS judge — see [Evaluation](#evaluation)). Optionally
+  [OpenRouter](https://openrouter.ai) (cloud) instead — see [Using OpenRouter instead of a local
+  model](#using-openrouter-instead-of-a-local-model)
 - **Embeddings:** local, in-process via `sentence-transformers` — `BAAI/bge-small-en-v1.5`
 - **Vector store:** Chroma
 - **Web search:** DuckDuckGo (via `ddgs`), no API key
@@ -98,6 +100,38 @@ python -m scripts.ask "What does the document say about X?"
 python -m scripts.evaluate --limit 5              # small interactive evaluation run
 python -m scripts.benchmark --limit 10            # fast CRAG-only latency/rate check, no RAGAS
 ```
+
+## Using OpenRouter instead of a local model
+
+By default this project runs entirely on-device (Ollama), which is the point of it being called
+"local-first" — nothing about your documents or questions leaves your machine. [OpenRouter](https://openrouter.ai)
+is a cloud API that gives access to many models (including free-tier ones) behind one key. It's
+useful if your hardware is too slow for comfortable local inference, but switching to it means
+your questions and document content **do** leave your machine and go to a third party — that's a
+real trade-off, not a free upgrade.
+
+To switch:
+
+1. **Get a free API key yourself** — go to [openrouter.ai/keys](https://openrouter.ai/keys),
+   sign up (no credit card required for the free tier), and create a key. I can't create the
+   account or generate the key for you; this step is yours to do.
+2. Set these in `.env`:
+   ```env
+   LLM_PROVIDER=openrouter
+   OPENROUTER_API_KEY=sk-or-v1-...your-key-here...
+   OPENROUTER_MODEL=meta-llama/llama-3.1-8b-instruct:free
+   ```
+3. Check [openrouter.ai/models](https://openrouter.ai/models?max_price=0) for the current list
+   of free models (marked `:free`) — free-tier model availability and exact IDs change over
+   time, so confirm the one in `OPENROUTER_MODEL` above is still live before relying on it.
+4. Restart the backend. `LLM_PROVIDER` controls only the pipeline's answering/grading/
+   verification model — embeddings (`sentence-transformers`) and the vector store (Chroma)
+   always stay local regardless of this setting.
+
+Free-tier rate limits on aggregators are usually tight (this pipeline can make 5-15+ model calls
+per question — grading, rewriting, claim verification — so a single question can burn through a
+meaningful chunk of a daily free quota). If you hit rate limits, the fix is either a paid
+OpenRouter tier or switching back to `LLM_PROVIDER=ollama`.
 
 ## Architecture
 

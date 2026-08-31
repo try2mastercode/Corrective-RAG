@@ -3,6 +3,7 @@ from app.embeddings.base import EmbeddingProvider
 from app.embeddings.local import get_embedding_provider
 from app.llm.base import LLMClient
 from app.llm.ollama import OllamaClient
+from app.llm.openrouter import OpenRouterClient
 from app.retrieval.retriever import Retriever
 from app.retrieval.vector_store import ChromaVectorStore, get_vector_store
 
@@ -25,4 +26,6 @@ def build_retriever(settings: Settings | None = None) -> Retriever:
 
 def build_llm_client(settings: Settings | None = None) -> LLMClient:
     settings = settings or get_settings()
+    if settings.llm_provider == "openrouter":
+        return OpenRouterClient(settings.openrouter_api_key, settings.openrouter_model)
     return OllamaClient(settings.llm_base_url, settings.llm_model)
