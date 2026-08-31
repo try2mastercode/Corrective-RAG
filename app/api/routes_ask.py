@@ -1,9 +1,10 @@
+import asyncio
 import logging
 import time
 
 from fastapi import APIRouter
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.core.dependencies import build_llm_client, build_retriever
 from app.core.models import AskRequest, AskResponse, RetrieveResponse, VerificationOutcome, VerificationResult
 from app.core.tracing import _build_run_trace, new_run_id, record_run
@@ -17,21 +18,26 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["ask"])
 
 
-@router.post("/retrieve", response_model=RetrieveResponse)
-async def retrieve(query: str):
-    settings = get_settings()
+def _retrieve_sync(query: str, settings: Settings) -> RetrieveResponse:
     retriever = build_retriever(settings)
     results = retriever.retrieve(query, top_k=settings.top_k)
     return RetrieveResponse(query=query, results=results)
 
 
-@router.post("/ask", response_model=AskResponse)
-async def ask(request: AskRequest):
+@router.post("/retrieve", response_model=RetrieveResponse)
+async def retrieve(query: str):
+    # Embedding inference and the Chroma query are synchronous, CPU-bound/blocking calls --
+    # running them directly in this async def would block the whole event loop (and every other
+    # concurrent request, including /health) for their duration. Offload to a worker thread.
+    settings = get_settings()
+    return await asyncio.to_thread(_retrieve_sync, query, settings)
+
+
+def _ask_sync(request: AskRequest, settings: Settings) -> AskResponse:
     run_id = new_run_id()
     start = time.monotonic()
     logger.info("run %s: question=%r web_fallback=%s", run_id, request.question, request.web_fallback)
 
-    settings = get_settings()
     retriever = build_retriever(settings)
     llm = build_llm_client(settings)
 
@@ -91,3 +97,13 @@ async def ask(request: AskRequest):
         grounding_status=outcome.verification.status,
         debug=debug_info,
     )
+
+
+@router.post("/ask", response_model=AskResponse)
+async def ask(request: AskRequest):
+    # The full CRAG pipeline (retrieval, grading, rewriting, web search, generation,
+    # verification) is built from synchronous calls -- CPU-bound embedding inference and
+    # blocking HTTP calls to Ollama. Run it in a worker thread so a single slow /ask (which can
+    # take tens of seconds) doesn't block every other concurrent request on this server.
+    settings = get_settings()
+    return await asyncio.to_thread(_ask_sync, request, settings)

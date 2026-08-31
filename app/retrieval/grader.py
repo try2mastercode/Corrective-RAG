@@ -1,9 +1,8 @@
-import json
 import logging
-import re
 
 from app.core.models import GradedChunk, RetrievalGrade, RetrievalQualityResult, RetrievedChunk
 from app.llm.base import LLMClient
+from app.llm.retry import generate_parsed
 
 logger = logging.getLogger(__name__)
 
@@ -28,16 +27,6 @@ def _build_grader_prompt(question: str, chunk_text: str) -> str:
     return f"Question:\n{question}\n\nRetrieved passage:\n{chunk_text}\n\nReturn JSON only."
 
 
-def _extract_json(text: str) -> dict | None:
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if not match:
-        return None
-    try:
-        return json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return None
-
-
 def _parse_grade(raw: dict) -> RetrievalGrade | None:
     try:
         score = float(raw["score"])
@@ -55,17 +44,11 @@ def _parse_grade(raw: dict) -> RetrievalGrade | None:
 
 def grade_chunk(question: str, chunk_text: str, llm: LLMClient, max_retries: int = 2) -> RetrievalGrade:
     prompt = _build_grader_prompt(question, chunk_text)
+    grade = generate_parsed(llm, prompt, RETRIEVAL_GRADER_SYSTEM_PROMPT_V1, _parse_grade, max_retries)
 
-    for attempt in range(max_retries + 1):
-        raw_output = llm.generate(prompt, system=RETRIEVAL_GRADER_SYSTEM_PROMPT_V1, temperature=0.0)
-        parsed = _extract_json(raw_output)
-        grade = _parse_grade(parsed) if parsed else None
-
-        if grade is not None:
-            logger.info("retrieval grade: score=%.2f label=%s", grade.score, grade.label)
-            return grade
-
-        logger.warning("malformed grader output on attempt %d: %r", attempt + 1, raw_output)
+    if grade is not None:
+        logger.info("retrieval grade: score=%.2f label=%s", grade.score, grade.label)
+        return grade
 
     logger.error("grader failed after %d attempts; defaulting to IRRELEVANT", max_retries + 1)
     return RetrievalGrade(

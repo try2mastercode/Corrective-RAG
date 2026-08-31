@@ -1,7 +1,6 @@
 from app.core.models import GradedChunk, RetrievalGrade, RetrievedChunk
 from app.llm.base import LLMClient
 from app.retrieval.grader import (
-    _extract_json,
     _parse_grade,
     calculate_retrieval_quality,
     grade_chunk,
@@ -21,20 +20,6 @@ class FakeLLM(LLMClient):
 
 def _chunk(chunk_id: str = "c1", text: str = "some text") -> RetrievedChunk:
     return RetrievedChunk(chunk_id=chunk_id, text=text, score=0.9, source="doc.txt", metadata={})
-
-
-def test_extract_json_finds_embedded_object():
-    text = 'Sure, here you go: {"score": 0.8, "label": "RELEVANT", "reason": "ok"} thanks'
-    parsed = _extract_json(text)
-    assert parsed == {"score": 0.8, "label": "RELEVANT", "reason": "ok"}
-
-
-def test_extract_json_returns_none_for_no_json():
-    assert _extract_json("no json here") is None
-
-
-def test_extract_json_returns_none_for_broken_json():
-    assert _extract_json("{score: 0.8 broken}") is None
 
 
 def test_parse_grade_valid():

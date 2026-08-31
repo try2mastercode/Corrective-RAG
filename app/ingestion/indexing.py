@@ -16,6 +16,11 @@ def index_document(
     doc = load_document(path)
     chunks = chunk_document(doc, chunk_size_tokens=chunk_size_tokens, overlap_tokens=overlap_tokens)
 
+    # document_id is a content hash, so re-indexing an edited file under the same filename
+    # produces a brand-new document_id -- without this, the old version's chunks would never be
+    # cleaned up and would keep showing up in retrieval alongside the current version.
+    vector_store.delete_by_source(doc.source)
+
     if not chunks:
         return {"document_id": doc.document_id, "source": doc.source, "chunks_indexed": 0}
 

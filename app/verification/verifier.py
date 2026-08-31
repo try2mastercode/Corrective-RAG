@@ -3,7 +3,7 @@ import logging
 from app.core.config import Settings
 from app.core.models import ClaimVerification, Evidence, VerificationOutcome, VerificationResult
 from app.llm.base import LLMClient
-from app.llm.json_utils import extract_json
+from app.llm.retry import generate_parsed
 from app.verification.claims import extract_claims
 from app.verification.correction import correct_answer
 
@@ -35,9 +35,15 @@ def _build_verification_prompt(claim: str, evidence: list[Evidence]) -> str:
     return f"Evidence:\n{evidence_block}\n\nClaim:\n{claim}\n\nReturn JSON only."
 
 
+def _coerce_bool(value) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() == "true"
+    return bool(value)
+
+
 def _parse_verification(raw: dict, claim: str) -> ClaimVerification | None:
     try:
-        supported = bool(raw["supported"])
+        supported = _coerce_bool(raw["supported"])
         confidence = float(raw.get("confidence", 0.0))
         evidence_ids = raw.get("evidence_ids", [])
     except (KeyError, TypeError, ValueError):
@@ -54,16 +60,12 @@ def _parse_verification(raw: dict, claim: str) -> ClaimVerification | None:
 
 def verify_claim(claim: str, evidence: list[Evidence], llm: LLMClient, max_retries: int = 2) -> ClaimVerification:
     prompt = _build_verification_prompt(claim, evidence)
+    result = generate_parsed(
+        llm, prompt, CLAIM_VERIFIER_SYSTEM_PROMPT_V1, lambda raw: _parse_verification(raw, claim), max_retries
+    )
 
-    for attempt in range(max_retries + 1):
-        raw_output = llm.generate(prompt, system=CLAIM_VERIFIER_SYSTEM_PROMPT_V1, temperature=0.0)
-        parsed = extract_json(raw_output)
-        result = _parse_verification(parsed, claim) if parsed else None
-
-        if result is not None:
-            return result
-
-        logger.warning("malformed claim-verification output on attempt %d: %r", attempt + 1, raw_output)
+    if result is not None:
+        return result
 
     logger.error("claim verification failed after %d attempts; treating claim as unsupported", max_retries + 1)
     return ClaimVerification(claim=claim, supported=False, evidence_ids=[], confidence=0.0)

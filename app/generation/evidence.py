@@ -27,7 +27,9 @@ def build_evidence(chunks: list[RetrievedChunk], max_context_chars: int = 8000) 
             continue
 
         if evidence and total_chars + len(chunk.text) > max_context_chars:
-            break
+            # Don't stop entirely -- a smaller, still-useful chunk ranked further down might
+            # still fit even though this one doesn't.
+            continue
 
         seen_normalized.add(normalized)
         total_chars += len(chunk.text)

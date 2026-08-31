@@ -43,16 +43,36 @@ class ChromaVectorStore:
             self._collection.delete(where={"document_id": document_id})
         return count
 
+    def delete_by_source(self, source: str) -> int:
+        """Delete all chunks whose metadata.source matches, regardless of document_id. Used
+        when re-indexing a document under the same filename: since document_id is a content
+        hash, editing a file produces a brand-new document_id on re-index, and without this the
+        old version's chunks would never be cleaned up and would keep showing up in retrieval
+        alongside the current version."""
+        existing = self._collection.get(where={"source": source})
+        count = len(existing["ids"])
+        if count:
+            self._collection.delete(where={"source": source})
+        return count
+
     def search(self, query_embedding: list[float], top_k: int) -> list[dict]:
         return self.search_with_scores(query_embedding, top_k)
 
     def search_with_scores(self, query_embedding: list[float], top_k: int) -> list[dict]:
-        if self._collection.count() == 0:
+        # Read count() once -- a second read (e.g. min(top_k, self._collection.count())) could
+        # race a concurrent delete emptying the collection between the two calls and pass
+        # n_results=0, which chromadb rejects with a TypeError instead of an empty result.
+        count = self._collection.count()
+        if count == 0:
             return []
-        result = self._collection.query(
-            query_embeddings=[query_embedding],
-            n_results=min(top_k, self._collection.count()),
-        )
+        try:
+            result = self._collection.query(
+                query_embeddings=[query_embedding],
+                n_results=min(top_k, count),
+            )
+        except TypeError:
+            # The collection was emptied by a concurrent delete after the count() above.
+            return []
         results = []
         for i in range(len(result["ids"][0])):
             distance = result["distances"][0][i]

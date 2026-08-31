@@ -1,7 +1,7 @@
 import logging
 
 from app.llm.base import LLMClient
-from app.llm.json_utils import extract_json
+from app.llm.retry import generate_parsed
 
 logger = logging.getLogger(__name__)
 
@@ -41,16 +41,10 @@ def extract_claims(answer: str, llm: LLMClient, max_retries: int = 2) -> list[st
         return []
 
     prompt = _build_claim_extraction_prompt(answer)
+    claims = generate_parsed(llm, prompt, CLAIM_EXTRACTOR_SYSTEM_PROMPT_V1, _parse_claims, max_retries)
 
-    for attempt in range(max_retries + 1):
-        raw_output = llm.generate(prompt, system=CLAIM_EXTRACTOR_SYSTEM_PROMPT_V1, temperature=0.0)
-        parsed = extract_json(raw_output)
-        claims = _parse_claims(parsed) if parsed is not None else None
-
-        if claims is not None:
-            return claims
-
-        logger.warning("malformed claim-extraction output on attempt %d: %r", attempt + 1, raw_output)
+    if claims is not None:
+        return claims
 
     logger.error(
         "claim extraction failed after %d attempts; treating the whole answer as one claim",

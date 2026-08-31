@@ -43,6 +43,42 @@ def test_delete_document(tmp_path):
     assert remaining[0]["document_id"] == "d2"
 
 
+def test_delete_by_source_removes_chunks_regardless_of_document_id(tmp_path):
+    store = ChromaVectorStore(str(tmp_path), embedding_dimension=3, embedding_model="fake-model")
+    old_version = _chunk("c1", "old_doc_id", "outdated content")
+    unrelated = _chunk("c2", "other_doc_id", "unrelated content")
+    old_version.metadata.source = "report.txt"
+    unrelated.metadata.source = "other.txt"
+    store.add_documents([old_version, unrelated], [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+
+    deleted = store.delete_by_source("report.txt")
+
+    assert deleted == 1
+    remaining = store.list_documents()
+    assert len(remaining) == 1
+    assert remaining[0]["document_id"] == "other_doc_id"
+
+
+def test_reindexing_edited_document_removes_stale_chunks(tmp_path):
+    """Regression test: document_id is a content hash, so editing a file produces a new
+    document_id on re-index. Without cleanup by source filename, the old version's chunks would
+    linger in the store forever alongside the new version."""
+    store = ChromaVectorStore(str(tmp_path), embedding_dimension=3, embedding_model="fake-model")
+
+    v1 = _chunk("c1", "doc_id_v1", "The event happened in 2020.")
+    v1.metadata.source = "notes.txt"
+    store.add_documents([v1], [[1.0, 0.0, 0.0]])
+    store.delete_by_source("notes.txt")  # what index_document now does before adding new chunks
+
+    v2 = _chunk("c2", "doc_id_v2", "The event happened in 2021 (corrected).")
+    v2.metadata.source = "notes.txt"
+    store.add_documents([v2], [[0.0, 1.0, 0.0]])
+
+    remaining = store.list_documents()
+    assert len(remaining) == 1
+    assert remaining[0]["document_id"] == "doc_id_v2"
+
+
 def test_search_on_empty_store_returns_empty_list(tmp_path):
     store = ChromaVectorStore(str(tmp_path), embedding_dimension=3, embedding_model="fake-model")
     assert store.search_with_scores([1.0, 0.0, 0.0], top_k=5) == []

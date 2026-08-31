@@ -1,9 +1,8 @@
-import json
 import logging
-import re
 
 from app.core.models import QueryRewrite
 from app.llm.base import LLMClient
+from app.llm.retry import generate_parsed
 
 logger = logging.getLogger(__name__)
 
@@ -29,16 +28,6 @@ def _build_rewrite_prompt(question: str) -> str:
     return f"Original question:\n{question}\n\nReturn JSON only."
 
 
-def _extract_json(text: str) -> dict | None:
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if not match:
-        return None
-    try:
-        return json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return None
-
-
 def _parse_rewrite(raw: dict, original_query: str) -> QueryRewrite | None:
     try:
         rewritten = str(raw["rewritten_query"]).strip()
@@ -54,17 +43,13 @@ def _parse_rewrite(raw: dict, original_query: str) -> QueryRewrite | None:
 
 def rewrite_query(question: str, llm: LLMClient, max_retries: int = 2) -> QueryRewrite:
     prompt = _build_rewrite_prompt(question)
+    rewrite = generate_parsed(
+        llm, prompt, QUERY_REWRITER_SYSTEM_PROMPT_V1, lambda raw: _parse_rewrite(raw, question), max_retries
+    )
 
-    for attempt in range(max_retries + 1):
-        raw_output = llm.generate(prompt, system=QUERY_REWRITER_SYSTEM_PROMPT_V1, temperature=0.0)
-        parsed = _extract_json(raw_output)
-        rewrite = _parse_rewrite(parsed, question) if parsed else None
-
-        if rewrite is not None:
-            logger.info("query rewrite: %r -> %r", question, rewrite.rewritten_query)
-            return rewrite
-
-        logger.warning("malformed rewrite output on attempt %d: %r", attempt + 1, raw_output)
+    if rewrite is not None:
+        logger.info("query rewrite: %r -> %r", question, rewrite.rewritten_query)
+        return rewrite
 
     logger.error("query rewriter failed after %d attempts; falling back to original query", max_retries + 1)
     return QueryRewrite(

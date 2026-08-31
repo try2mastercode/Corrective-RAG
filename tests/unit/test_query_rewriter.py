@@ -1,5 +1,5 @@
 from app.core.models import QueryRewrite
-from app.correction.query_rewriter import _extract_json, _parse_rewrite, rewrite_query
+from app.correction.query_rewriter import _parse_rewrite, rewrite_query
 from app.llm.base import LLMClient
 
 
@@ -12,11 +12,6 @@ class FakeLLM(LLMClient):
         response = self._responses[min(self.calls, len(self._responses) - 1)]
         self.calls += 1
         return response
-
-
-def test_extract_json_finds_embedded_object():
-    text = 'Here: {"rewritten_query": "expanded question", "reason": "added context"} done'
-    assert _extract_json(text) == {"rewritten_query": "expanded question", "reason": "added context"}
 
 
 def test_parse_rewrite_valid():
