@@ -41,7 +41,7 @@ direction), not for routine "may I commit?" checkpoints.
 - [x] **Phase 3** — Corrective Query Rewriting and Re-Retrieval — DONE (commit `b7380b9`)
 - [x] **Phase 4** — Web Search Fallback — DONE (commit `0fe03ca`)
 - [x] **Phase 5** — Evidence Builder and Grounded Generation — DONE (commit `3813458`)
-- [x] **Phase 6** — Hallucination / Claim Verification — DONE, committing now
+- [x] **Phase 6** — Hallucination / Claim Verification — DONE (commit `52a5521`)
 - [ ] **Phase 7** — RAGAS Evaluation and Benchmarking — IN PROGRESS
 - [ ] Phase 8 — Vanilla HTML/CSS/JS Frontend
 - [ ] Phase 9 — Observability, Security, Testing, Hardening
@@ -57,7 +57,7 @@ direction), not for routine "may I commit?" checkpoints.
 | 3 | `b7380b9` | feat: add corrective query rewriting |
 | 4 | `0fe03ca` | feat: add web search fallback |
 | 5 | `3813458` | feat: add grounded evidence generation |
-| 6 | _pending_ | feat: add hallucination verification |
+| 6 | `52a5521` | feat: add hallucination verification |
 
 ## Completed phase detail — Phase 0
 
