@@ -623,3 +623,51 @@ model), and committed as individual human-authored commits with no AI attributio
 the README's Limitations section for the honest, complete list of what's deliberately out of
 scope or simplified, and this file's per-phase "Completed phase detail" sections above for the
 full reasoning and debugging history behind every non-obvious decision made along the way.
+
+## Post-completion: dev-runner script, deep bug review, OpenRouter (2026-08-31)
+
+After the 10 phases above, three follow-up changes landed:
+
+1. **`chore: add single-command dev runner, scope backend reload to app/`** (`a8e4052`) —
+   `scripts/run_dev.py` starts both backend and frontend with one command. Also fixed a real bug
+   found while using it: `uvicorn --reload` with no `--reload-dir` watches the *entire* project
+   (docs, data, everything), so editing README.md/PROGRESS.md was silently restarting the
+   backend mid-session, causing intermittent "Failed to fetch" in the frontend. Scoped to
+   `--reload-dir app`.
+
+2. **`fix: address bugs found by deep code review`** (`bbf7c48`) — a full multi-angle review of
+   `app/` (4 parallel finder passes covering retrieval/correction, generation/verification,
+   API/ingestion, and reuse/efficiency; 10 findings verified and fixed). The two most severe:
+   - `verifier.py`'s `bool(raw["supported"])` treated a quoted JSON string `"false"` from the
+     LLM as Python-truthy (`True`) — a small-model formatting slip could silently mark a
+     hallucinated claim as verified, defeating Phase 6's entire purpose. Fixed with a
+     string-aware `_coerce_bool`.
+   - Every route handler ran synchronous, blocking LLM/embedding/Chroma calls directly inside
+     `async def` with no thread offload — under the default single Uvicorn worker, one in-flight
+     `/ask` (which can take 30-120s) blocked every other concurrent request, including
+     `/health`. Fixed by wrapping each route's logic in `asyncio.to_thread(...)`; verified live
+     (fired a slow `/ask`, confirmed `/health` still responded in under a second concurrently).
+
+   Other fixes: evidence-budget cap dropped smaller chunks after one oversized one (`break` ->
+   `continue`); Windows reserved device filenames (CON, NUL, ...) weren't rejected on upload;
+   sanitized-filename collisions could silently overwrite different content; upload size was
+   checked only after fully buffering into memory; a TOCTOU race in `search_with_scores` could
+   crash on concurrent delete; re-indexing an edited document left the old version's chunks
+   behind forever; the greedy JSON-extraction regex could swallow valid JSON when the model
+   added any trailing/leading brace, and was duplicated across 3 files despite a shared
+   `json_utils.extract_json` already existing (now a proper balanced-brace scanner, used
+   everywhere); the four LLM retry-loop implementations were near-identical copies (extracted to
+   `app/llm/retry.py::generate_parsed`). Full findings history/reasoning: see the code-review
+   tool output from that session, or `git show bbf7c48`.
+
+3. **`feat: add OpenRouter as an optional cloud LLM provider`** (`25008ce`) — after discussing
+   the local model's CPU-only speed (this machine: Intel i7-8665U, 4C/8T, no dedicated GPU;
+   Intel UHD 620 iGPU which Ollama can't use), the user explicitly chose to add OpenRouter as an
+   alternative, knowingly overriding the project's own "local-first, no hosted LLM" rule for
+   their own use. **Ollama stays the default** (`LLM_PROVIDER=ollama`); OpenRouter is opt-in via
+   `LLM_PROVIDER=openrouter` + a user-supplied `OPENROUTER_API_KEY` (the user must get this
+   themselves at openrouter.ai/keys -- account creation and API keys are things this tool
+   cannot obtain on someone's behalf). Embeddings and the vector store remain local regardless
+   of which LLM provider is selected. See README's new "Using OpenRouter instead of a local
+   model" section for the full walkthrough and the free-tier rate-limit caveat (this pipeline's
+   5-15+ calls per question will burn through a small free quota fast).
