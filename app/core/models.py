@@ -124,6 +124,7 @@ class SourceCitation(BaseModel):
 
 
 class AskResponse(BaseModel):
+    run_id: str
     answer: str
     sources: list[SourceCitation]
     retrieval_status: str
