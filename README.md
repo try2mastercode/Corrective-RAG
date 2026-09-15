@@ -106,6 +106,31 @@ question
 
 Set `debug: true` on `/ask` (or tick "Debug mode" in the UI) to see every step.
 
+### `/ask/agentic` — the model decides, not the pipeline
+
+Everything above is a fixed pipeline: a Python `if` statement decides when to rewrite the query
+or fall back to web search, based on a retrieval-quality score. `/ask/agentic` is a separate
+endpoint (same request/response shape as `/ask`) where the model itself is handed a `web_search`
+tool definition and decides, per question, whether the retrieved evidence is enough or it needs
+to search — real tool-calling, not branching logic that calls the tool on the model's behalf.
+
+```
+question
+   → retrieve top-k chunks (no grading pass)
+   → LLM sees the evidence + a web_search tool definition
+       model decides: answer now, or call web_search(query)?
+       (repeats, bounded by max_tool_rounds, until the model stops calling the tool)
+   → answer + sources (local + any web results the model chose to fetch)
+```
+
+Requires an LLM provider whose client implements `generate_with_tools` — OpenRouter and Groq do
+(standard OpenAI-style function calling). Ollama's `/api/chat` supports it too, but tool-calling
+reliability on this project's default local model (`llama3.2:3b`) is noticeably weaker than on a
+larger hosted model — a bigger local model (`qwen2.5:7b-instruct`, already used for RAGAS
+judging) will call the tool more reliably if you want to stay fully local. This endpoint skips
+claim verification (see `grounding_status: "NOT_VERIFIED"` in its response) since verifying a
+decision already produced by tool selection is redundant for a comparison endpoint like this one.
+
 ## Evaluation
 
 ```bash

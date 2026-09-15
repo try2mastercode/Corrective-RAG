@@ -1,8 +1,10 @@
+import json
 import logging
 import time
 
 import httpx
 
+from app.core.models import LLMTurn, ToolCall
 from app.llm.base import LLMClient
 
 logger = logging.getLogger(__name__)
@@ -40,12 +42,15 @@ class OpenAICompatibleClient(LLMClient):
         self._timeout = timeout
         self._max_rate_limit_retries = max_rate_limit_retries
 
-    def _post_once(self, messages: list[dict], temperature: float) -> dict:
+    def _post_once(self, messages: list[dict], temperature: float, tools: list[dict] | None = None) -> dict:
+        payload = {"model": self._model, "messages": messages, "temperature": temperature}
+        if tools:
+            payload["tools"] = tools
         try:
             response = httpx.post(
                 self.api_url,
                 headers={"Authorization": f"Bearer {self._api_key}"},
-                json={"model": self._model, "messages": messages, "temperature": temperature},
+                json=payload,
                 timeout=self._timeout,
             )
             response.raise_for_status()
@@ -101,3 +106,45 @@ class OpenAICompatibleClient(LLMClient):
             return data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
             raise OpenAICompatibleClientError(f"Unexpected {self.provider_name} response shape: {data}") from exc
+
+    def generate_with_tools(self, messages: list[dict], tools: list[dict], temperature: float = 0.0) -> LLMTurn:
+        data = None
+        last_error: OpenAICompatibleRateLimitError | None = None
+        for attempt in range(self._max_rate_limit_retries + 1):
+            try:
+                data = self._post_once(messages, temperature, tools=tools)
+                break
+            except OpenAICompatibleRateLimitError as exc:
+                last_error = exc
+                if attempt < self._max_rate_limit_retries:
+                    wait_seconds = 2**attempt
+                    logger.warning(
+                        "%s rate-limited (attempt %d/%d); retrying in %ds",
+                        self.provider_name,
+                        attempt + 1,
+                        self._max_rate_limit_retries,
+                        wait_seconds,
+                    )
+                    time.sleep(wait_seconds)
+
+        if data is None:
+            raise OpenAICompatibleClientError(
+                f"{self.provider_name} request failed after retries: {last_error}"
+            ) from last_error
+
+        try:
+            message = data["choices"][0]["message"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise OpenAICompatibleClientError(f"Unexpected {self.provider_name} response shape: {data}") from exc
+
+        parsed_calls = []
+        for tc in message.get("tool_calls") or []:
+            fn = tc.get("function", {})
+            try:
+                arguments = json.loads(fn.get("arguments") or "{}")
+            except json.JSONDecodeError:
+                logger.warning("%s returned non-JSON tool arguments: %r", self.provider_name, fn.get("arguments"))
+                arguments = {}
+            parsed_calls.append(ToolCall(id=tc.get("id", ""), name=fn.get("name", ""), arguments=arguments))
+
+        return LLMTurn(content=message.get("content"), tool_calls=parsed_calls)

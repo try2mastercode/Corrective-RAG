@@ -132,6 +132,20 @@ class AskResponse(BaseModel):
     debug: dict | None = None
 
 
+class ToolCall(BaseModel):
+    id: str
+    name: str
+    arguments: dict = Field(default_factory=dict)
+
+
+class LLMTurn(BaseModel):
+    """One turn of a tool-calling LLM response: either a final text answer, or one or more
+    tool calls the model itself chose to make (see LLMClient.generate_with_tools)."""
+
+    content: str | None = None
+    tool_calls: list[ToolCall] = Field(default_factory=list)
+
+
 class DocumentInfo(BaseModel):
     document_id: str
     title: str
