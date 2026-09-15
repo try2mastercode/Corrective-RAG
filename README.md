@@ -1,11 +1,11 @@
-# Corrective RAG — Self-Evaluating Local Llama
+# Corrective RAG : Self-Evaluating Local Llama
 
 A RAG pipeline that double-checks itself: grades its own retrieval, rewrites the query and
 retries if the results are weak, falls back to web search if it has to, and verifies every
 claim in the final answer against the evidence before showing it to you. Runs fully local on
 Ollama by default, with Groq/OpenRouter as opt-in cloud fallbacks.
 
-Benchmarked against a plain baseline RAG pipeline with RAGAS — see [Evaluation](#evaluation).
+Benchmarked against a plain baseline RAG pipeline with RAGAS see [Evaluation](#evaluation).
 
 ## Stack
 
@@ -16,7 +16,6 @@ Benchmarked against a plain baseline RAG pipeline with RAGAS — see [Evaluation
 - Plain HTML/CSS/JS frontend, no build step
 - RAGAS for evaluation
 
-No Docker.
 
 ## Setup
 
@@ -35,7 +34,7 @@ Using the local model? Pull it first:
 
 ```bash
 ollama pull llama3.2:3b
-ollama pull qwen2.5:7b-instruct   # only if you'll run the evaluation
+ollama pull qwen2.5:7b-instruct  
 ```
 
 ## Running it
@@ -76,7 +75,7 @@ GROQ_MODEL=allam-2-7b
 ```
 
 Key's free at [console.groq.com/keys](https://console.groq.com/keys), no card. Stay away from
-"reasoning" models (`openai/gpt-oss-20b`, `groq/compound-mini`) — they spend the token budget
+"reasoning" models (`openai/gpt-oss-20b`, `groq/compound-mini`)  they spend the token budget
 on hidden thinking output and hit rate limits fast. `allam-2-7b` is plain and reliable.
 
 OpenRouter, if you'd rather:
@@ -135,18 +134,18 @@ decision already produced by tool selection is redundant for a comparison endpoi
 
 ```bash
 python -m scripts.evaluate --limit 5      # quick
-python -m scripts.evaluate                # full set, ~3hrs on CPU
+python -m scripts.evaluate                
 ```
 
 Runs baseline and CRAG over the same questions, scores both with RAGAS, writes a report. RAGAS
-needs a bigger model to judge with (`qwen2.5:7b-instruct`) — the small pipeline model gives
+needs a bigger model to judge with (`qwen2.5:7b-instruct`) the small pipeline model gives
 unreliable scores judging its own work, and the bigger one is slow on CPU, hence the runtime.
 A sample report's checked in at [`data/evaluation/report.md`](data/evaluation/report.md).
 
 ## Known limitations
 
 - Eval set is 24 questions; growing it just means more runtime
-- RAGAS pinned to `0.1.21` — newer versions break on a missing import
+- RAGAS pinned to `0.1.21` newer versions break on a missing import
 - Local and web evidence aren't scored on the same scale
 - Upload size capped at 20MB after the fact, not streamed — fine for local use, not for public-facing
 - Run traces live in memory, last 500, gone on restart
